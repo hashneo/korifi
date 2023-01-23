@@ -45,13 +45,14 @@ func NewServiceInstanceRepo(
 }
 
 type CreateServiceInstanceMessage struct {
-	Name        string
-	SpaceGUID   string
-	Credentials map[string]string
-	Type        string
-	Tags        []string
-	Labels      map[string]string
-	Annotations map[string]string
+	Name            string
+	SpaceGUID       string
+	ServicePlanGUID string
+	Credentials     map[string]string
+	Type            string
+	Tags            []string
+	Labels          map[string]string
+	Annotations     map[string]string
 }
 
 type ListServiceInstanceMessage struct {
@@ -65,14 +66,15 @@ type DeleteServiceInstanceMessage struct {
 }
 
 type ServiceInstanceRecord struct {
-	Name       string
-	GUID       string
-	SpaceGUID  string
-	SecretName string
-	Tags       []string
-	Type       string
-	CreatedAt  string
-	UpdatedAt  string
+	Name        string
+	GUID        string
+	SpaceGUID   string
+	SecretName  string
+	ServicePlan string
+	Tags        []string
+	Type        string
+	CreatedAt   string
+	UpdatedAt   string
 }
 
 func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInfo authorization.Info, message CreateServiceInstanceMessage) (ServiceInstanceRecord, error) {
@@ -83,6 +85,15 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 	}
 
 	cfServiceInstance := message.toCFServiceInstance()
+
+	switch cfServiceInstance.Spec.Type {
+	case korifiv1alpha1.UserProvidedType:
+		break
+	case korifiv1alpha1.ManagedType:
+		cfServiceInstance.Spec.ServicePlan = message.ServicePlanGUID
+		break
+	}
+
 	err = userClient.Create(ctx, &cfServiceInstance)
 	if err != nil {
 		return ServiceInstanceRecord{}, apierrors.FromK8sError(err, ServiceInstanceResourceType)
@@ -94,7 +105,15 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 		if secretObj.StringData == nil {
 			secretObj.StringData = map[string]string{}
 		}
-		updateSecretTypeFields(&secretObj)
+
+		switch cfServiceInstance.Spec.Type {
+		case korifiv1alpha1.UserProvidedType:
+			secretObj.Type = serviceBindingSecretTypePrefix + korifiv1alpha1.UserProvidedType
+			break
+		case korifiv1alpha1.ManagedType:
+			secretObj.Type = serviceBindingSecretTypePrefix + korifiv1alpha1.ManagedType
+			break
+		}
 
 		return nil
 	})
@@ -103,6 +122,7 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 	}
 
 	return cfServiceInstanceToServiceInstanceRecord(cfServiceInstance), nil
+
 }
 
 // nolint:dupl
@@ -198,14 +218,15 @@ func cfServiceInstanceToServiceInstanceRecord(cfServiceInstance korifiv1alpha1.C
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfServiceInstance.ObjectMeta)
 
 	return ServiceInstanceRecord{
-		Name:       cfServiceInstance.Spec.DisplayName,
-		GUID:       cfServiceInstance.Name,
-		SpaceGUID:  cfServiceInstance.Namespace,
-		SecretName: cfServiceInstance.Spec.SecretName,
-		Tags:       cfServiceInstance.Spec.Tags,
-		Type:       string(cfServiceInstance.Spec.Type),
-		CreatedAt:  cfServiceInstance.CreationTimestamp.UTC().Format(TimestampFormat),
-		UpdatedAt:  updatedAtTime,
+		Name:        cfServiceInstance.Spec.DisplayName,
+		GUID:        cfServiceInstance.Name,
+		SpaceGUID:   cfServiceInstance.Namespace,
+		SecretName:  cfServiceInstance.Spec.SecretName,
+		ServicePlan: cfServiceInstance.Spec.ServicePlan,
+		Tags:        cfServiceInstance.Spec.Tags,
+		Type:        string(cfServiceInstance.Spec.Type),
+		CreatedAt:   cfServiceInstance.CreationTimestamp.UTC().Format(TimestampFormat),
+		UpdatedAt:   updatedAtTime,
 	}
 }
 

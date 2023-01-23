@@ -5,27 +5,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: cfserviceinstances.korifi.cloudfoundry.org
+  name: cfservicebrokers.korifi.cloudfoundry.org
 spec:
   group: korifi.cloudfoundry.org
   names:
-    kind: CFServiceInstance
-    listKind: CFServiceInstanceList
-    plural: cfserviceinstances
-    singular: cfserviceinstance
+    kind: CFServiceBroker
+    listKind: CFServiceBrokerList
+    plural: cfservicebrokers
+    singular: cfservicebroker
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - jsonPath: .spec.displayName
-      name: Display Name
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: CFServiceInstance is the Schema for the cfserviceinstances API
+        description: CFServiceBroker is the Schema for the cfservicebrokers API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -40,39 +33,31 @@ spec:
           metadata:
             type: object
           spec:
-            description: CFServiceInstanceSpec defines the desired state of CFServiceInstance
+            description: CFServiceBrokerSpec defines the desired state of CFServiceBroker
             properties:
-              displayName:
-                description: The mutable, user-friendly name of the service instance.
+              offeringName:
+                description: The mutable, user-friendly name of the service broker.
                   Unlike metadata.name, the user can change this field
                 type: string
-              secretName:
-                description: Name of a secret containing the service credentials.
-                  The Secret must be in the same namespace
-                type: string
-              servicePlan:
-                description: Subscribed service plan GUID. Must be set if the type
-                  is `managed`
+              password:
                 type: string
               tags:
                 description: Tags are used by apps to identify service instances
                 items:
                   type: string
                 type: array
-              type:
-                description: Type of the Service Instance. Must be `user-provided`
-                  or `managed`
-                enum:
-                - user-provided
-                - managed
+              url:
+                type: string
+              userName:
                 type: string
             required:
-            - displayName
-            - secretName
-            - type
+            - offeringName
+            - password
+            - url
+            - userName
             type: object
           status:
-            description: CFServiceInstanceStatus defines the observed state of CFServiceInstance
+            description: CFServiceBrokerStatus defines the observed state of CFServiceBroker
             properties:
               binding:
                 description: A reference to the Secret containing the credentials
@@ -86,7 +71,7 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
               conditions:
-                description: Conditions capture the current status of the CFServiceInstance
+                description: Conditions capture the current status of the CFServiceBroker
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource. --- This struct is intended for direct

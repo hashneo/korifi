@@ -8,7 +8,7 @@ import (
 
 type ServiceInstanceCreate struct {
 	Name          string                       `json:"name" validate:"required"`
-	Type          string                       `json:"type" validate:"required,oneof=user-provided"`
+	Type          string                       `json:"type" validate:"required,oneof=user-provided managed"`
 	Tags          []string                     `json:"tags" validate:"serviceinstancetaglength"`
 	Credentials   map[string]string            `json:"credentials"`
 	Relationships ServiceInstanceRelationships `json:"relationships" validate:"required"`
@@ -16,18 +16,20 @@ type ServiceInstanceCreate struct {
 }
 
 type ServiceInstanceRelationships struct {
-	Space Relationship `json:"space" validate:"required"`
+	Space       Relationship `json:"space" validate:"required"`
+	ServicePlan Relationship `json:"service_plan" validate:"omitempty"`
 }
 
 func (p ServiceInstanceCreate) ToServiceInstanceCreateMessage() repositories.CreateServiceInstanceMessage {
 	return repositories.CreateServiceInstanceMessage{
-		Name:        p.Name,
-		SpaceGUID:   p.Relationships.Space.Data.GUID,
-		Credentials: p.Credentials,
-		Type:        p.Type,
-		Tags:        p.Tags,
-		Labels:      p.Metadata.Labels,
-		Annotations: p.Metadata.Annotations,
+		Name:            p.Name,
+		SpaceGUID:       p.Relationships.Space.Data.GUID,
+		ServicePlanGUID: p.Relationships.ServicePlan.Data.GUID,
+		Credentials:     p.Credentials,
+		Type:            p.Type,
+		Tags:            p.Tags,
+		Labels:          p.Metadata.Labels,
+		Annotations:     p.Metadata.Annotations,
 	}
 }
 

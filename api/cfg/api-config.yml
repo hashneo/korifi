@@ -1,0 +1,20 @@
+externalFQDN: api.steventaylor.net
+externalPort: 0
+internalPort: 9000
+idleTimeout: 900
+readTimeout: 900
+readHeaderTimeout: 10
+writeTimeout: 900
+rootNamespace: cf
+builderName: kpack-image-builder
+defaultLifecycleConfig:
+  type: buildpack
+  stack: cflinuxfs3
+  stagingMemoryMB: 1024
+  stagingDiskMB: 1024
+containerRepositoryPrefix: "harbor.steventaylor.me/korifi/packages"
+packageRegistrySecretName: image-registry-credentials
+defaultDomainName: steventaylor.net
+userCertificateExpirationWarningDuration: 168h
+authProxyHost: ""
+authProxyCACert: ""

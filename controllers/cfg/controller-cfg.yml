@@ -1,0 +1,11 @@
+    builderName: kpack-image-builder
+    runnerName: statefulset-runner
+    cfProcessDefaults:
+      memoryMB: 1024
+      diskQuotaMB: 1024
+    cfRootNamespace: cf
+    containerRegistrySecretName: "image-registry-credentials"
+    taskTTL: 30d
+    workloads_tls_secret_name: korifi-workloads-ingress-cert
+    workloads_tls_secret_namespace: korifi-system
+    includeContourRouter: false

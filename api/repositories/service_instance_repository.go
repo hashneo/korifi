@@ -91,7 +91,6 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 		break
 	case korifiv1alpha1.ManagedType:
 		cfServiceInstance.Spec.ServicePlan = message.ServicePlanGUID
-		break
 	}
 
 	err = userClient.Create(ctx, &cfServiceInstance)
@@ -109,10 +108,8 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 		switch cfServiceInstance.Spec.Type {
 		case korifiv1alpha1.UserProvidedType:
 			secretObj.Type = serviceBindingSecretTypePrefix + korifiv1alpha1.UserProvidedType
-			break
 		case korifiv1alpha1.ManagedType:
 			secretObj.Type = serviceBindingSecretTypePrefix + korifiv1alpha1.ManagedType
-			break
 		}
 
 		return nil
@@ -122,7 +119,6 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 	}
 
 	return cfServiceInstanceToServiceInstanceRecord(cfServiceInstance), nil
-
 }
 
 // nolint:dupl
@@ -276,6 +272,7 @@ func returnServiceInstanceList(serviceInstanceList []korifiv1alpha1.CFServiceIns
 	return serviceInstanceRecords
 }
 
+/*
 func updateSecretTypeFields(secret *corev1.Secret) {
 	userSpecifiedType, typeSpecified := secret.StringData["type"]
 	if typeSpecified {
@@ -285,3 +282,4 @@ func updateSecretTypeFields(secret *corev1.Secret) {
 		secret.Type = serviceBindingSecretTypePrefix + korifiv1alpha1.UserProvidedType
 	}
 }
+*/

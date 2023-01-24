@@ -35,8 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	SAPv1alpha1 "github.com/SAP/sap-btp-service-operator/api/v1alpha1"
 )
 
 // CFServiceInstanceReconciler reconciles a CFServiceInstance object
@@ -59,32 +57,28 @@ func NewCFServiceInstanceReconciler(
 //+kubebuilder:rbac:groups=korifi.cloudfoundry.org,resources=cfserviceinstances/status,verbs=get;update;patch
 
 func (r *CFServiceInstanceReconciler) ReconcileResource(ctx context.Context, cfServiceInstance *korifiv1alpha1.CFServiceInstance) (ctrl.Result, error) {
+	/*
+		serviceInstance := new(SAPv1alpha1.ServiceInstance)
+		err := r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Name, Namespace: cfServiceInstance.Namespace}, serviceInstance)
 
-	serviceInstance := new(SAPv1alpha1.ServiceInstance)
-	err := r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Name, Namespace: cfServiceInstance.Namespace}, serviceInstance)
+		if err != nil {
+					serviceInstance.Name = cfServiceInstance.Name
+					serviceInstance.Namespace = cfServiceInstance.Namespace
+					serviceInstance.Spec.ser
 
-	if err != nil {
-		/*
-				serviceInstance.Name = cfServiceInstance.Name
-				serviceInstance.Namespace = cfServiceInstance.Namespace
-				serviceInstance.Spec.ser
+				spec:
+				serviceInstanceName:
+					xsuaa - service
+				externalName:
+					xsuaa - bridge - binding
+				secretName:
+					xsuaa - secret
 
-			spec:
-			serviceInstanceName:
-				xsuaa - service
-			externalName:
-				xsuaa - bridge - binding
-			secretName:
-				xsuaa - secret
-
-				err = r.k8sClient.Create(ctx, serviceInstance)
-
-		*/
-	}
-
+					err = r.k8sClient.Create(ctx, serviceInstance)
+		}
+	*/
 	secret := new(corev1.Secret)
-	err = r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Spec.SecretName, Namespace: cfServiceInstance.Namespace}, secret)
-
+	err := r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Spec.SecretName, Namespace: cfServiceInstance.Namespace}, secret)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			cfServiceInstance.Status = bindSecretUnavailableStatus(cfServiceInstance, "SecretNotFound", "Binding secret does not exist")

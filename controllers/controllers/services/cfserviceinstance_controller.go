@@ -57,26 +57,6 @@ func NewCFServiceInstanceReconciler(
 //+kubebuilder:rbac:groups=korifi.cloudfoundry.org,resources=cfserviceinstances/status,verbs=get;update;patch
 
 func (r *CFServiceInstanceReconciler) ReconcileResource(ctx context.Context, cfServiceInstance *korifiv1alpha1.CFServiceInstance) (ctrl.Result, error) {
-	/*
-		serviceInstance := new(SAPv1alpha1.ServiceInstance)
-		err := r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Name, Namespace: cfServiceInstance.Namespace}, serviceInstance)
-
-		if err != nil {
-					serviceInstance.Name = cfServiceInstance.Name
-					serviceInstance.Namespace = cfServiceInstance.Namespace
-					serviceInstance.Spec.ser
-
-				spec:
-				serviceInstanceName:
-					xsuaa - service
-				externalName:
-					xsuaa - bridge - binding
-				secretName:
-					xsuaa - secret
-
-					err = r.k8sClient.Create(ctx, serviceInstance)
-		}
-	*/
 	secret := new(corev1.Secret)
 	err := r.k8sClient.Get(ctx, types.NamespacedName{Name: cfServiceInstance.Spec.SecretName, Namespace: cfServiceInstance.Namespace}, secret)
 	if err != nil {

@@ -180,6 +180,7 @@ func main() {
 		userClientFactory,
 		spaceRepo,
 		authorization.NewNamespacePermissions(privilegedCRClient, cachingIdentityProvider),
+		authorization.NewNamespacePermissions(privilegedCRClient, cachingIdentityProvider),
 		config.RootNamespace,
 		config.RoleMappings,
 	)
@@ -328,6 +329,7 @@ func main() {
 			decoderValidator,
 		),
 		handlers.NewWhoAmI(cachingIdentityProvider, *serverURL),
+		handlers.NewUser(*serverURL),
 		handlers.NewBuildpack(
 			*serverURL,
 			buildpackRepo,

@@ -1,4 +1,4 @@
-module github.com/hashneo/korifi
+module code.cloudfoundry.org/korifi
 
 go 1.19
 

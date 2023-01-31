@@ -164,6 +164,7 @@ type manifestResource struct {
 
 type applicationResource struct {
 	Name         string                               `yaml:"name"`
+	Command      string                               `yaml:"command"`
 	DefaultRoute bool                                 `yaml:"default-route"`
 	RandomRoute  bool                                 `yaml:"random-route"`
 	NoRoute      bool                                 `yaml:"no-route"`
@@ -230,14 +231,11 @@ type cfErrs struct {
 	Errors []cfErr
 }
 
-type processResourceList struct {
-	Resources []processResource `json:"resources"`
-}
-
 type processResource struct {
 	resource  `json:",inline"`
 	Type      string `json:"type"`
 	Instances int    `json:"instances"`
+	Command   string `yaml:"command"`
 }
 
 type metadataPatch struct {
@@ -448,7 +446,7 @@ func asyncCreateSpace(spaceName, orgGUID string, createdSpaceGUID *string, wg *s
 
 // createRole creates an org or space role
 // You should probably invoke this via createOrgRole or createSpaceRole
-func createRole(roleName, orgSpaceType, userName, orgSpaceGUID string) {
+func createRole(roleName, orgSpaceType, userName, orgSpaceGUID string) string {
 	rolesURL := apiServerRoot + "/v3/roles"
 
 	payload := typedResource{
@@ -462,21 +460,25 @@ func createRole(roleName, orgSpaceType, userName, orgSpaceGUID string) {
 	}
 
 	var resultErr cfErrs
+	var createdRole typedResource
 	resp, err := adminClient.R().
 		SetBody(payload).
+		SetResult(&createdRole).
 		SetError(&resultErr).
 		Post(rolesURL)
 
 	ExpectWithOffset(2, err).NotTo(HaveOccurred())
 	ExpectWithOffset(2, resp).To(HaveRestyStatusCode(http.StatusCreated))
+
+	return createdRole.GUID
 }
 
-func createOrgRole(roleName, userName, orgGUID string) {
-	createRole(roleName, "organization", userName, orgGUID)
+func createOrgRole(roleName, userName, orgGUID string) string {
+	return createRole(roleName, "organization", userName, orgGUID)
 }
 
-func createSpaceRole(roleName, userName, spaceGUID string) {
-	createRole(roleName, "space", userName, spaceGUID)
+func createSpaceRole(roleName, userName, spaceGUID string) string {
+	return createRole(roleName, "space", userName, spaceGUID)
 }
 
 func createApp(spaceGUID, name string) string {
@@ -533,19 +535,17 @@ func getEnv(appName string) map[string]interface{} {
 }
 
 func getProcess(appGUID, processType string) processResource {
-	var processList processResourceList
+	var process processResource
 	EventuallyWithOffset(1, func(g Gomega) {
 		resp, err := adminClient.R().
-			SetResult(&processList).
-			Get("/v3/processes?app_guids=" + appGUID)
+			SetResult(&process).
+			Get("/v3/apps/" + appGUID + "/processes/" + processType)
 
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(resp).To(HaveRestyStatusCode(http.StatusOK))
-		g.Expect(processList.Resources).NotTo(BeEmpty())
 	}).Should(Succeed())
 
-	ExpectWithOffset(1, processList.Resources).To(HaveLen(1))
-	return processList.Resources[0]
+	return process
 }
 
 func createServiceInstance(spaceGUID, name string) string {

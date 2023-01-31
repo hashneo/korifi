@@ -43,6 +43,8 @@ require (
 	sigs.k8s.io/controller-tools v0.10.0
 )
 
+require github.tools.sap/BTPFTechOffice/korifi/crd/extensions v0.0.0-20230129013507-cfdcb4d4ef10
+
 require (
 	cloud.google.com/go/compute v1.14.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.2 // indirect

@@ -43,6 +43,7 @@ import (
 	statefulsetcontrollers "code.cloudfoundry.org/korifi/statefulset-runner/controllers"
 	"code.cloudfoundry.org/korifi/tools"
 	"code.cloudfoundry.org/korifi/tools/registry"
+	SAPv1alpha1 "github.tools.sap/BTPFTechOffice/korifi/crd/extensions/api/v1alpha1"
 
 	buildv1alpha2 "github.com/pivotal/kpack/pkg/apis/build/v1alpha2"
 	contourv1 "github.com/projectcontour/contour/apis/projectcontour/v1"
@@ -75,6 +76,8 @@ func init() {
 	utilruntime.Must(contourv1.AddToScheme(scheme))
 	utilruntime.Must(korifiv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(servicebindingv1beta1.AddToScheme(scheme))
+	utilruntime.Must(SAPv1alpha1.AddToScheme(scheme))
+
 	//+kubebuilder:scaffold:scheme
 }
 

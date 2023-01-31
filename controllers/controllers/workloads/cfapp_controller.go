@@ -57,6 +57,9 @@ func NewCFAppReconciler(k8sClient client.Client, scheme *runtime.Scheme, log log
 //+kubebuilder:rbac:groups=korifi.cloudfoundry.org,resources=cfapps/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;patch
 
+//+kubebuilder:rbac:groups=extensions.korifi.cloudfoundry.org,resources=cfserviceplans,verbs=get;list;watch
+//+kubebuilder:rbac:groups=extensions.korifi.cloudfoundry.org,resources=cfserviceofferings,verbs=get;list;watch
+
 func (r *CFAppReconciler) ReconcileResource(ctx context.Context, cfApp *korifiv1alpha1.CFApp) (ctrl.Result, error) {
 	log := r.log.WithValues("namespace", cfApp.Namespace, "name", cfApp.Name)
 

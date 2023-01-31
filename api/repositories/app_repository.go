@@ -593,7 +593,7 @@ func (f *AppRepo) GetAppEnv(ctx context.Context, authInfo authorization.Info, ap
 					apierrors.FromK8sError(err, AppEnvResourceType))
 			}
 
-			if len(vcapServicesPresenter.UserProvided) > 0 {
+			if len(*vcapServicesPresenter) > 0 {
 				systemEnvMap["VCAP_SERVICES"] = vcapServicesPresenter
 			}
 		}

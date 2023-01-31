@@ -1555,7 +1555,7 @@ func generateVcapServiceSecretDataByte() (map[string][]byte, error) {
 	}
 
 	vcapServicesData, err := json.Marshal(env.VcapServicesPresenter{
-		UserProvided: []env.ServiceDetails{
+		"user-provided": []env.ServiceDetails{
 			serviceDetails,
 		},
 	})

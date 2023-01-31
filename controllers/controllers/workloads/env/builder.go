@@ -1,25 +1,28 @@
 package env
 
 import (
+	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
+	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
 	"context"
 	"encoding/json"
 	"fmt"
-
-	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
-	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
-
+	SAPv1alpha1 "github.tools.sap/BTPFTechOffice/korifi/crd/extensions/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type VcapServicesPresenter struct {
-	UserProvided []ServiceDetails `json:"user-provided,omitempty"`
-}
+type VcapServicesPresenter map[string][]ServiceDetails
 
+/*
+	type VcapServicesPresenter struct {
+		UserProvided []ServiceDetails `json:"user-provided,omitempty"`
+	}
+*/
 type ServiceDetails struct {
 	Label          string            `json:"label"`
 	Name           string            `json:"name"`
+	Plan           string            `json:"plan"`
 	Tags           []string          `json:"tags"`
 	InstanceGUID   string            `json:"instance_guid"`
 	InstanceName   string            `json:"instance_name"`
@@ -73,8 +76,11 @@ func (b *Builder) BuildVCAPServicesEnvValue(ctx context.Context, cfApp *korifiv1
 		return "{}", nil
 	}
 
-	serviceEnvs := []ServiceDetails{}
+	data := VcapServicesPresenter{}
+
 	for _, currentServiceBinding := range serviceBindings.Items {
+		serviceEnvs := []ServiceDetails{}
+
 		// If finalizing do not append
 		if !currentServiceBinding.DeletionTimestamp.IsZero() {
 			continue
@@ -87,11 +93,17 @@ func (b *Builder) BuildVCAPServicesEnvValue(ctx context.Context, cfApp *korifiv1
 		}
 
 		serviceEnvs = append(serviceEnvs, serviceEnv)
+
+		data[serviceEnvs[0].Label] = serviceEnvs
 	}
 
-	toReturn, err := json.Marshal(VcapServicesPresenter{
-		UserProvided: serviceEnvs,
-	})
+	toReturn, err := json.Marshal(data)
+
+	/*
+		toReturn, err := json.Marshal(VcapServicesPresenter{
+			UserProvided: serviceEnvs,
+		})
+	*/
 	if err != nil {
 		return "", err
 	}
@@ -126,10 +138,12 @@ func envVarsFromSecrets(secrets ...corev1.Secret) []corev1.EnvVar {
 }
 
 func fromServiceBinding(
+	ctx context.Context,
+	k8sClient client.Client,
 	serviceBinding korifiv1alpha1.CFServiceBinding,
 	serviceInstance korifiv1alpha1.CFServiceInstance,
 	serviceBindingSecret corev1.Secret,
-) ServiceDetails {
+) (ServiceDetails, error) {
 	var serviceName string
 	var bindingName *string
 
@@ -146,9 +160,34 @@ func fromServiceBinding(
 		tags = []string{}
 	}
 
+	detailsLabel := "user-provided"
+	servicePlan := ""
+
+	if serviceInstance.Spec.Type == "managed" {
+		cfServicePlan := SAPv1alpha1.CFServicePlan{}
+
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceInstance.Namespace, Name: serviceInstance.Spec.ServicePlan}, &cfServicePlan)
+		if err != nil {
+			return ServiceDetails{}, err
+		}
+
+		// Set the service plan name we are using
+		servicePlan = cfServicePlan.Spec.PlanName
+
+		cfServiceOffering := SAPv1alpha1.CFServiceOffering{}
+
+		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceInstance.Namespace, Name: cfServicePlan.Spec.Relationships.ServiceOfferingGUID}, &cfServiceOffering)
+		if err != nil {
+			return ServiceDetails{}, err
+		}
+
+		detailsLabel = cfServiceOffering.Spec.OfferingName
+	}
+
 	return ServiceDetails{
-		Label:          "user-provided",
+		Label:          detailsLabel,
 		Name:           serviceName,
+		Plan:           servicePlan,
 		Tags:           tags,
 		InstanceGUID:   serviceInstance.Name,
 		InstanceName:   serviceInstance.Spec.DisplayName,
@@ -157,7 +196,7 @@ func fromServiceBinding(
 		Credentials:    mapFromSecret(serviceBindingSecret),
 		SyslogDrainURL: nil,
 		VolumeMounts:   []string{},
-	}
+	}, nil
 }
 
 func buildSingleServiceEnv(ctx context.Context, k8sClient client.Client, serviceBinding korifiv1alpha1.CFServiceBinding) (ServiceDetails, error) {
@@ -177,5 +216,5 @@ func buildSingleServiceEnv(ctx context.Context, k8sClient client.Client, service
 		return ServiceDetails{}, fmt.Errorf("error fetching CFServiceBinding Secret: %w", err)
 	}
 
-	return fromServiceBinding(serviceBinding, serviceInstance, secret), nil
+	return fromServiceBinding(ctx, k8sClient, serviceBinding, serviceInstance, secret)
 }

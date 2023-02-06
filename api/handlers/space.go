@@ -68,6 +68,21 @@ func (h *Space) create(r *http.Request) (*routing.Response, error) {
 	return routing.NewResponse(http.StatusCreated).WithBody(presenter.ForSpace(record, h.apiBaseURL)), nil
 }
 
+func (h *Space) get(r *http.Request) (*routing.Response, error) {
+	authInfo, _ := authorization.InfoFromContext(r.Context())
+	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.space.list")
+
+	spaceGUID := routing.URLParam(r, "guid")
+
+	space, err := h.spaceRepo.GetSpace(r.Context(), authInfo, spaceGUID)
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, apierrors.ForbiddenAsNotFound(err), "Failed to fetch org from Kubernetes", "GUID", spaceGUID)
+	}
+
+	spaceResult := presenter.ForSpace(space, h.apiBaseURL)
+	return routing.NewResponse(http.StatusOK).WithBody(spaceResult), nil
+}
+
 func (h *Space) list(r *http.Request) (*routing.Response, error) {
 	authInfo, _ := authorization.InfoFromContext(r.Context())
 	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.space.list")
@@ -145,6 +160,7 @@ func (h *Space) AuthenticatedRoutes() []routing.Route {
 	return []routing.Route{
 		{Method: "GET", Pattern: SpacesPath, Handler: h.list},
 		{Method: "POST", Pattern: SpacesPath, Handler: h.create},
+		{Method: "GET", Pattern: SpacePath, Handler: h.get},
 		{Method: "PATCH", Pattern: SpacePath, Handler: h.update},
 		{Method: "DELETE", Pattern: SpacePath, Handler: h.delete},
 	}

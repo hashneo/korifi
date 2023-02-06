@@ -56,9 +56,11 @@ type AppSetCurrentDroplet struct {
 }
 
 type AppList struct {
-	Names      string
-	GUIDs      string
-	SpaceGuids string
+	Names          string
+	GUIDs          string
+	SpaceGuids     string
+	LabelSelectors string
+	Page           string
 }
 
 func (a *AppList) ToMessage() repositories.ListAppsMessage {
@@ -70,13 +72,15 @@ func (a *AppList) ToMessage() repositories.ListAppsMessage {
 }
 
 func (a *AppList) SupportedKeys() []string {
-	return []string{"names", "guids", "space_guids", "order_by"}
+	return []string{"names", "guids", "space_guids", "order_by", "label_selector", "page"}
 }
 
 func (a *AppList) DecodeFromURLValues(values url.Values) error {
 	a.Names = values.Get("names")
 	a.GUIDs = values.Get("guids")
 	a.SpaceGuids = values.Get("space_guids")
+	a.LabelSelectors = values.Get("label_selector")
+	a.Page = values.Get("page")
 	return nil
 }
 

@@ -34,9 +34,11 @@ func (p ServiceInstanceCreate) ToServiceInstanceCreateMessage() repositories.Cre
 }
 
 type ServiceInstanceList struct {
-	Names      string
-	SpaceGuids string
-	OrderBy    string
+	Names         string
+	SpaceGuids    string
+	OrderBy       string
+	LabelSelector string
+	Page          string
 }
 
 func (l *ServiceInstanceList) ToMessage() repositories.ListServiceInstanceMessage {
@@ -47,12 +49,14 @@ func (l *ServiceInstanceList) ToMessage() repositories.ListServiceInstanceMessag
 }
 
 func (l *ServiceInstanceList) SupportedKeys() []string {
-	return []string{"names", "space_guids", "fields", "order_by", "per_page"}
+	return []string{"names", "space_guids", "fields", "order_by", "per_page", "label_selector", "page"}
 }
 
 func (l *ServiceInstanceList) DecodeFromURLValues(values url.Values) error {
 	l.Names = values.Get("names")
 	l.SpaceGuids = values.Get("space_guids")
 	l.OrderBy = values.Get("order_by")
+	l.LabelSelector = values.Get("label_selector")
+	l.Page = values.Get("page")
 	return nil
 }

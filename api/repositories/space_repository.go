@@ -258,7 +258,7 @@ func cfSpaceToSpaceRecord(cfSpace korifiv1alpha1.CFSpace) SpaceRecord {
 		DisplayName:      cfSpace.Spec.DisplayName,
 		Name:             cfSpace.Name,
 		GUID:             cfSpace.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
-		OrganizationGUID: cfSpace.Namespace,
+		OrganizationGUID: cfSpace.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		Annotations:      cfSpace.Annotations,
 		Labels:           cfSpace.Labels,
 		CreatedAt:        cfSpace.CreationTimestamp.Time,

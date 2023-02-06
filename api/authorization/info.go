@@ -21,6 +21,10 @@ func (b *BasicToken) get() []byte {
 	return []byte(b.data)
 }
 
+func (b *BasicToken) UserId() string {
+	return ""
+}
+
 type JwtToken struct {
 	data   string
 	parsed *jwt.Token
@@ -54,9 +58,14 @@ func (j *JwtToken) get() []byte {
 	return []byte(j.data)
 }
 
+func (j *JwtToken) UserId() string {
+	return j.getClaim("user_id")
+}
+
 type Token interface {
 	parse(rawToken string) error
 	get() []byte
+	UserId() string
 }
 
 func NewToken(data string) *Token {

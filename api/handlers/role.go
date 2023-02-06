@@ -72,6 +72,13 @@ func (h *Role) create(r *http.Request) (*routing.Response, error) {
 	role := payload.ToMessage()
 	role.GUID = uuid.NewString()
 
+	// TODO: Not sure if this make sense but I need the GUID of the user so this seems logical (for now).
+	if role.UserGUID == "" {
+		if authInfo.Token != nil {
+			role.UserGUID = (*authInfo.Token).UserId()
+		}
+	}
+
 	record, err := h.roleRepo.CreateRole(r.Context(), authInfo, role)
 	if err != nil {
 		return nil, apierrors.LogAndReturn(logger, err, "Failed to create role", "Role Type", role.Type, "Space", role.Space, "User", role.User)
@@ -115,7 +122,7 @@ func filterRoles(roleListFilter *payloads.RoleListFilter, roles []repositories.R
 			match(roleListFilter.Types, role.Type) &&
 			match(roleListFilter.SpaceGUIDs, role.Space) &&
 			match(roleListFilter.OrgGUIDs, role.Org) &&
-			match(roleListFilter.UserGUIDs, role.User) {
+			match(roleListFilter.UserGUIDs, role.UserGUID) {
 			filteredRoles = append(filteredRoles, role)
 		}
 	}

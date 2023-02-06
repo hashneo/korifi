@@ -67,10 +67,12 @@ func (p RoleCreate) ToMessage() repositories.CreateRoleMessage {
 
 		if p.Relationships.User.Data.GUID != "" {
 			record.User = p.Relationships.User.Data.GUID
+			record.UserGUID = p.Relationships.User.Data.GUID
 		}
 	} else {
 		record.Kind = rbacv1.ServiceAccountKind
 		record.User = p.Relationships.KubernetesServiceAccount.Data.GUID
+		record.UserGUID = p.Relationships.KubernetesServiceAccount.Data.GUID
 	}
 
 	return record

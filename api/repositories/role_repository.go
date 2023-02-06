@@ -346,6 +346,7 @@ func (r *RoleRepo) toRoleRecord(roleBinding rbacv1.RoleBinding, cfRoleName strin
 		UpdatedAt: updatedAtTime,
 		Type:      cfRoleName,
 		User:      roleBinding.Subjects[0].Name,
+		UserGUID:  roleBinding.Labels[RoleUserGuidLabel],
 		Kind:      roleBinding.Subjects[0].Kind,
 	}
 

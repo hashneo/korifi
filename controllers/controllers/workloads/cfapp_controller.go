@@ -3,6 +3,7 @@ package workloads
 import (
 	"context"
 	"errors"
+	"regexp"
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
@@ -73,6 +74,12 @@ func (r *CFAppReconciler) ReconcileResource(ctx context.Context, cfApp *korifiv1
 		log.Error(err, "Error adding finalizer")
 		return ctrl.Result{}, err
 	}
+
+	if cfApp.Labels == nil {
+		cfApp.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfApp.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfApp.Namespace, "$1")
 
 	err = r.reconcileVCAPServicesSecret(ctx, log, cfApp)
 	if err != nil {

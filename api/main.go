@@ -111,6 +111,7 @@ func main() {
 		userClientFactory,
 		nsPermissions,
 		createTimeout,
+		namespaceRetriever,
 	)
 	spaceRepo := repositories.NewSpaceRepo(
 		namespaceRetriever,
@@ -241,7 +242,7 @@ func main() {
 	apiHandlers := []routing.Routable{
 		handlers.NewRootV3(config.ServerURL),
 		handlers.NewRoot(
-			config.ServerURL,
+			config,
 		),
 		handlers.NewResourceMatches(),
 		handlers.NewApp(

@@ -44,6 +44,7 @@ type PatchOrgMetadataMessage struct {
 
 type OrgRecord struct {
 	Name        string
+	Namespace   string
 	GUID        string
 	Suspended   bool
 	Labels      map[string]string
@@ -53,11 +54,12 @@ type OrgRecord struct {
 }
 
 type OrgRepo struct {
-	rootNamespace     string
-	privilegedClient  client.WithWatch
-	userClientFactory authorization.UserK8sClientFactory
-	nsPerms           *authorization.NamespacePermissions
-	timeout           time.Duration
+	rootNamespace      string
+	privilegedClient   client.WithWatch
+	userClientFactory  authorization.UserK8sClientFactory
+	nsPerms            *authorization.NamespacePermissions
+	timeout            time.Duration
+	namespaceRetriever NamespaceRetriever
 }
 
 func NewOrgRepo(
@@ -66,13 +68,15 @@ func NewOrgRepo(
 	userClientFactory authorization.UserK8sClientFactory,
 	nsPerms *authorization.NamespacePermissions,
 	timeout time.Duration,
+	namespaceRetriever NamespaceRetriever,
 ) *OrgRepo {
 	return &OrgRepo{
-		rootNamespace:     rootNamespace,
-		privilegedClient:  privilegedClient,
-		userClientFactory: userClientFactory,
-		nsPerms:           nsPerms,
-		timeout:           timeout,
+		rootNamespace:      rootNamespace,
+		privilegedClient:   privilegedClient,
+		userClientFactory:  userClientFactory,
+		nsPerms:            nsPerms,
+		timeout:            timeout,
+		namespaceRetriever: namespaceRetriever,
 	}
 }
 
@@ -167,7 +171,7 @@ func (r *OrgRepo) ListOrgs(ctx context.Context, info authorization.Info, filter 
 			continue
 		}
 
-		if !matchesFilter(cfOrg.Name, filter.GUIDs) {
+		if !matchesFilter(cfOrg.Labels[korifiv1alpha1.CFOrgGUIDLabelKey], filter.GUIDs) {
 			continue
 		}
 
@@ -203,9 +207,15 @@ func (r *OrgRepo) DeleteOrg(ctx context.Context, info authorization.Info, messag
 	if err != nil {
 		return fmt.Errorf("failed to build user client: %w", err)
 	}
+
+	name, err := r.namespaceRetriever.NameFor(ctx, message.GUID, OrgResourceType)
+	if err != nil {
+		return err
+	}
+
 	err = userClient.Delete(ctx, &korifiv1alpha1.CFOrg{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      message.GUID,
+			Name:      name,
 			Namespace: r.rootNamespace,
 		},
 	})
@@ -219,8 +229,13 @@ func (r *OrgRepo) PatchOrgMetadata(ctx context.Context, authInfo authorization.I
 		return OrgRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	name, err := r.namespaceRetriever.NameFor(ctx, message.GUID, OrgResourceType)
+	if err != nil {
+		return OrgRecord{}, err
+	}
+
 	cfOrg := new(korifiv1alpha1.CFOrg)
-	err = userClient.Get(ctx, client.ObjectKey{Namespace: r.rootNamespace, Name: message.GUID}, cfOrg)
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: r.rootNamespace, Name: name}, cfOrg)
 	if err != nil {
 		return OrgRecord{}, fmt.Errorf("failed to get org: %w", apierrors.FromK8sError(err, OrgResourceType))
 	}
@@ -237,13 +252,19 @@ func (r *OrgRepo) PatchOrgMetadata(ctx context.Context, authInfo authorization.I
 
 func cfOrgToOrgRecord(cfOrg korifiv1alpha1.CFOrg) OrgRecord {
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfOrg.ObjectMeta)
-	return OrgRecord{
-		GUID:        cfOrg.Name,
+
+	r := OrgRecord{
+		GUID:        cfOrg.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		Name:        cfOrg.Spec.DisplayName,
+		Namespace:   cfOrg.Name,
 		Suspended:   false,
 		Labels:      cfOrg.Labels,
 		Annotations: cfOrg.Annotations,
 		CreatedAt:   formatTimestamp(cfOrg.CreationTimestamp),
 		UpdatedAt:   updatedAtTime,
 	}
+
+	delete(r.Labels, korifiv1alpha1.CFOrgGUIDLabelKey)
+
+	return r
 }

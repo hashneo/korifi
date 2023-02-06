@@ -20,6 +20,7 @@ func (p OrgCreate) ToMessage() repositories.CreateOrgMessage {
 }
 
 type OrgPatch struct {
+	Name     string        `json:"name"`
 	Metadata MetadataPatch `json:"metadata"`
 }
 

@@ -19,6 +19,7 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -106,6 +107,14 @@ func (r *CFSpaceReconciler) ReconcileResource(ctx context.Context, cfSpace *kori
 	}
 
 	cfSpace.Status.GUID = cfSpace.GetName()
+
+	if cfSpace.Labels == nil {
+		cfSpace.Labels = map[string]string{}
+	}
+	cfSpace.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfSpace.Status.GUID, "$1")
+
+	//TODO: Find a way better way to do this!
+	cfSpace.Labels[korifiv1alpha1.CFOrgGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfSpace.Namespace, "$1")
 
 	getConditionOrSetAsUnknown(&cfSpace.Status.Conditions, korifiv1alpha1.ReadyConditionType)
 

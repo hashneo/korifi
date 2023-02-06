@@ -12,6 +12,11 @@ data:
     readTimeout: {{ .Values.api.apiServer.timeouts.read }}
     readHeaderTimeout: {{ .Values.api.apiServer.timeouts.readHeader }}
     writeTimeout: {{ .Values.api.apiServer.timeouts.write }}
+    {{- if .Values.global.useUAALogin }}
+    CFOnK8s: false
+    uaaURL: {{ required ".Values.api.uaaURL is required when global.useUAALogin is true" .Values.api.uaaURL | quote }}
+    loginURL: {{ required ".Values.api.loginUrl is required when global.useUAALogin is true" .Values.api.loginUrl | quote }}
+    {{- end }}
     rootNamespace: {{ .Values.global.rootNamespace }}
     builderName: {{ .Values.api.builderName }}
     defaultLifecycleConfig:

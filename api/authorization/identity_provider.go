@@ -18,6 +18,7 @@ const (
 
 type Identity struct {
 	Name string
+	GUID string
 	Kind string
 }
 
@@ -28,7 +29,7 @@ func (i *Identity) Hash() string {
 }
 
 type TokenIdentityInspector interface {
-	WhoAmI(context.Context, string) (Identity, error)
+	WhoAmI(context.Context, *Token) (Identity, error)
 }
 
 type CertIdentityInspector interface {
@@ -48,7 +49,7 @@ func NewCertTokenIdentityProvider(tokenInspector TokenIdentityInspector, certIns
 }
 
 func (p *CertTokenIdentityProvider) GetIdentity(ctx context.Context, info Info) (Identity, error) {
-	if info.Token != "" {
+	if info.Token != nil {
 		return p.tokenInspector.WhoAmI(ctx, info.Token)
 	}
 

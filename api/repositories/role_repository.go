@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ import (
 
 const (
 	RoleGuidLabel         = "cloudfoundry.org/role-guid"
+	RoleUserGuidLabel     = "cloudfoundry.org/user-guid"
 	roleBindingNamePrefix = "cf"
 	cfUserRoleType        = "cf_user"
 	RoleResourceType      = "Role"
@@ -32,12 +34,13 @@ type AuthorizedInChecker interface {
 }
 
 type CreateRoleMessage struct {
-	GUID  string
-	Type  string
-	Space string
-	Org   string
-	User  string
-	Kind  string
+	GUID     string
+	Type     string
+	Space    string
+	Org      string
+	User     string
+	UserGUID string
+	Kind     string
 }
 
 type DeleteRoleMessage struct {
@@ -54,6 +57,7 @@ type RoleRecord struct {
 	Space     string
 	Org       string
 	User      string
+	UserGUID  string
 	Kind      string
 }
 
@@ -116,12 +120,21 @@ func (r *RoleRepo) CreateRole(ctx context.Context, authInfo authorization.Info, 
 		}
 	}
 
-	ns := role.Space
-	if ns == "" {
-		ns = role.Org
+	namespace := ""
+
+	if role.Space != "" {
+		namespace, err = r.namespaceRetriever.NameFor(ctx, role.Space, SpaceResourceType)
+		if err != nil {
+			return RoleRecord{}, err
+		}
+	} else {
+		namespace, err = r.namespaceRetriever.NameFor(ctx, role.Org, OrgResourceType)
+		if err != nil {
+			return RoleRecord{}, err
+		}
 	}
 
-	roleBinding := createRoleBinding(ns, role.Type, role.Kind, role.User, role.GUID, k8sRoleConfig.Name, k8sRoleConfig.Propagate)
+	roleBinding := createRoleBinding(namespace, role.Type, role.Kind, role.User, role.UserGUID, role.GUID, k8sRoleConfig.Name, k8sRoleConfig.Propagate)
 
 	err = userClient.Create(ctx, &roleBinding)
 	if err != nil {
@@ -140,7 +153,7 @@ func (r *RoleRepo) CreateRole(ctx context.Context, authInfo authorization.Info, 
 		return RoleRecord{}, fmt.Errorf("invalid role type: %q", cfUserRoleType)
 	}
 
-	cfUserRoleBinding := createRoleBinding(r.rootNamespace, cfUserRoleType, role.Kind, role.User, uuid.NewString(), cfUserk8sRoleConfig.Name, false)
+	cfUserRoleBinding := createRoleBinding(r.rootNamespace, cfUserRoleType, role.Kind, role.User, role.UserGUID, uuid.NewString(), cfUserk8sRoleConfig.Name, false)
 	err = userClient.Create(ctx, &cfUserRoleBinding)
 	if err != nil {
 		if !k8serrors.IsAlreadyExists(err) {
@@ -189,13 +202,14 @@ func calculateRoleBindingName(roleType, roleUser string) string {
 	return fmt.Sprintf("%s-%x", roleBindingNamePrefix, sum)
 }
 
-func createRoleBinding(namespace, roleType, roleKind, roleUser, roleGUID, roleConfigName string, propagateLabelValue bool) rbacv1.RoleBinding {
+func createRoleBinding(namespace string, roleType string, roleKind string, roleUser string, roleUserGuid string, roleGUID string, roleConfigName string, propagateLabelValue bool) rbacv1.RoleBinding {
 	return rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      calculateRoleBindingName(roleType, roleUser),
 			Labels: map[string]string{
-				RoleGuidLabel: roleGUID,
+				RoleGuidLabel:     roleGUID,
+				RoleUserGuidLabel: roleUserGuid,
 			},
 			Annotations: map[string]string{
 				korifiv1alpha1.PropagateRoleBindingAnnotation: strconv.FormatBool(propagateLabelValue),
@@ -335,11 +349,12 @@ func (r *RoleRepo) toRoleRecord(roleBinding rbacv1.RoleBinding, cfRoleName strin
 		Kind:      roleBinding.Subjects[0].Kind,
 	}
 
+	//TODO: Find a way better way to do this!
 	switch r.roleMappings[cfRoleName].Level {
 	case config.OrgRole:
-		record.Org = roleBinding.Namespace
+		record.Org = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(roleBinding.Namespace, "$1")
 	case config.SpaceRole:
-		record.Space = roleBinding.Namespace
+		record.Space = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(roleBinding.Namespace, "$1")
 	}
 
 	return record

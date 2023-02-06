@@ -74,10 +74,12 @@ func (h *Space) list(r *http.Request) (*routing.Response, error) {
 
 	orgUIDs := parseCommaSeparatedList(r.URL.Query().Get("organization_guids"))
 	names := parseCommaSeparatedList(r.URL.Query().Get("names"))
+	GUIDs := parseCommaSeparatedList(r.URL.Query().Get("guids"))
 
 	spaces, err := h.spaceRepo.ListSpaces(r.Context(), authInfo, repositories.ListSpacesMessage{
 		OrganizationGUIDs: orgUIDs,
 		Names:             names,
+		GUIDs:             GUIDs,
 	})
 	if err != nil {
 		return nil, apierrors.LogAndReturn(logger, err, "Failed to fetch spaces")
@@ -124,7 +126,7 @@ func (h *Space) delete(r *http.Request) (*routing.Response, error) {
 	}
 
 	deleteSpaceMessage := repositories.DeleteSpaceMessage{
-		GUID:             spaceRecord.GUID,
+		Name:             spaceRecord.Name,
 		OrganizationGUID: spaceRecord.OrganizationGUID,
 	}
 	err = h.spaceRepo.DeleteSpace(r.Context(), authInfo, deleteSpaceMessage)

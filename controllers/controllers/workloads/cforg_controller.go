@@ -18,6 +18,7 @@ package workloads
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -118,7 +119,12 @@ func (r *CFOrgReconciler) ReconcileResource(ctx context.Context, cfOrg *korifiv1
 		return ctrl.Result{}, err
 	}
 
-	cfOrg.Status.GUID = cfOrg.Name
+	cfOrg.Status.GUID = cfOrg.GetName()
+
+	if cfOrg.Labels == nil {
+		cfOrg.Labels = map[string]string{}
+	}
+	cfOrg.Labels[korifiv1alpha1.CFOrgGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfOrg.Status.GUID, "$1")
 
 	getConditionOrSetAsUnknown(&cfOrg.Status.Conditions, korifiv1alpha1.ReadyConditionType)
 

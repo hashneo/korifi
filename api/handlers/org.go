@@ -86,6 +86,7 @@ func (h *Org) update(r *http.Request) (*routing.Response, error) {
 		return nil, apierrors.LogAndReturn(logger, err, "failed to decode payload")
 	}
 
+	//TODO: This does not patch the name, only the metadata (cannot rename an org)
 	org, err := h.orgRepo.PatchOrgMetadata(r.Context(), authInfo, payload.ToMessage(orgGUID))
 	if err != nil {
 		return nil, apierrors.LogAndReturn(logger, err, "Failed to patch org metadata", "OrgGUID", orgGUID)
@@ -116,8 +117,9 @@ func (h *Org) list(r *http.Request) (*routing.Response, error) {
 	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.org.list")
 
 	names := parseCommaSeparatedList(r.URL.Query().Get("names"))
+	guids := parseCommaSeparatedList(r.URL.Query().Get("guids"))
 
-	orgs, err := h.orgRepo.ListOrgs(r.Context(), authInfo, repositories.ListOrgsMessage{Names: names})
+	orgs, err := h.orgRepo.ListOrgs(r.Context(), authInfo, repositories.ListOrgsMessage{Names: names, GUIDs: guids})
 	if err != nil {
 		return nil, apierrors.LogAndReturn(logger, err, "failed to fetch orgs")
 	}

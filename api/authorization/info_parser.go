@@ -27,7 +27,7 @@ func (p *InfoParser) Parse(authorizationHeader string) (Info, error) {
 	scheme, data := values[0], values[1]
 	switch strings.ToLower(scheme) {
 	case BearerScheme:
-		return Info{Token: data}, nil
+		return Info{Token: NewToken(data)}, nil
 	case CertScheme:
 		certBytes, err := base64.StdEncoding.DecodeString(data)
 		if err != nil {

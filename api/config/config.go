@@ -26,6 +26,10 @@ type (
 		ExternalFQDN string `yaml:"externalFQDN"`
 		ExternalPort int    `yaml:"externalPort"`
 
+		UaaUrl   string `yaml:"uaaURL"`
+		LoginUrl string `yaml:"loginURL"`
+		CFOnK8s  *bool  `yaml:"CFOnK8s"`
+
 		ServerURL string
 
 		RootNamespace                            string                 `yaml:"rootNamespace"`
@@ -75,6 +79,15 @@ func LoadFromPath(path string) (*APIConfig, error) {
 	config.ServerURL, err = config.composeServerURL()
 	if err != nil {
 		return nil, err
+	}
+
+	//TODO: Ensure this is handled a little better
+	if config.UaaUrl != "" {
+		config.UaaUrl = defaultExternalProtocol + "://" + config.UaaUrl
+	}
+
+	if config.LoginUrl != "" {
+		config.LoginUrl = defaultExternalProtocol + "://" + config.LoginUrl
 	}
 
 	return &config, nil

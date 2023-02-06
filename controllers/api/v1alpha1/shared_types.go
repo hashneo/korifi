@@ -15,6 +15,8 @@ const (
 	CFDomainGUIDLabelKey    = "korifi.cloudfoundry.org/domain-guid"
 	CFRouteGUIDLabelKey     = "korifi.cloudfoundry.org/route-guid"
 	CFTaskGUIDLabelKey      = "korifi.cloudfoundry.org/task-guid"
+	CFOrgGUIDLabelKey       = "korifi.cloudfoundry.org/org-guid"
+	CFSpaceGUIDLabelKey     = "korifi.cloudfoundry.org/space-guid"
 
 	StagingConditionType   = "Staging"
 	ReadyConditionType     = "Ready"

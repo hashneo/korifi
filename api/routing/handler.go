@@ -80,25 +80,25 @@ func PresentError(logger logr.Logger, w http.ResponseWriter, err error) {
 	PresentError(logger, w, apierrors.NewUnknownError(err))
 }
 
-func (response *Response) writeTo(w http.ResponseWriter) error {
-	for header, headerValues := range response.headers {
+func (r *Response) writeTo(w http.ResponseWriter) error {
+	for header, headerValues := range r.headers {
 		for _, value := range headerValues {
 			w.Header().Add(header, value)
 		}
 	}
 
-	if response.body == nil {
-		w.WriteHeader(response.httpStatus)
+	if r.body == nil {
+		w.WriteHeader(r.httpStatus)
 		return nil
 	}
 
 	w.Header().Set(headers.ContentType, "application/json")
-	w.WriteHeader(response.httpStatus)
+	w.WriteHeader(r.httpStatus)
 
 	encoder := json.NewEncoder(w)
 	encoder.SetEscapeHTML(false)
 
-	err := encoder.Encode(response.body)
+	err := encoder.Encode(r.body)
 	if err != nil {
 		return fmt.Errorf("failed to encode and write response: %w", err)
 	}

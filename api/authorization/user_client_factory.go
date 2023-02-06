@@ -40,7 +40,7 @@ func (f UnprivilegedClientFactory) BuildClient(authInfo Info) (client.WithWatch,
 
 	switch strings.ToLower(authInfo.Scheme()) {
 	case BearerScheme:
-		config.BearerToken = authInfo.Token
+		config.BearerToken = string((*authInfo.Token).get())
 
 	case CertScheme:
 		certBlock, rst := pem.Decode(authInfo.CertData)
@@ -76,7 +76,7 @@ func (f UnprivilegedClientFactory) BuildK8sClient(authInfo Info) (k8sclient.Inte
 
 	switch strings.ToLower(authInfo.Scheme()) {
 	case BearerScheme:
-		config.BearerToken = authInfo.Token
+		config.BearerToken = string((*authInfo.Token).get())
 
 	case CertScheme:
 		certBlock, rst := pem.Decode(authInfo.CertData)

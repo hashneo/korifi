@@ -17,18 +17,15 @@ limitations under the License.
 package workloads
 
 import (
-	"context"
-	"crypto/sha1"
-	"errors"
-	"fmt"
-	"sort"
-	"strconv"
-
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/config"
 	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
 	"code.cloudfoundry.org/korifi/tools/k8s"
-
+	"context"
+	"crypto/sha1"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -43,6 +40,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
+	"strconv"
 )
 
 type EnvBuilder interface {
@@ -316,11 +315,37 @@ func (r *CFProcessReconciler) getPort(ctx context.Context, cfProcess *korifiv1al
 	return 8080, nil
 }
 
+type vCapApplication struct {
+	ApplicationId   string        `json:"application_id"`
+	ApplicationName string        `json:"application_name"`
+	ApplicationUris []interface{} `json:"application_uris"`
+	CfApi           string        `json:"cf_api"`
+	Limits          struct {
+		Fds int `json:"fds"`
+	} `json:"limits"`
+	Name             string        `json:"name"`
+	OrganizationId   string        `json:"organization_id"`
+	OrganizationName string        `json:"organization_name"`
+	SpaceId          string        `json:"space_id"`
+	SpaceName        string        `json:"space_name"`
+	Uris             []interface{} `json:"uris"`
+	Users            interface{}   `json:"users"`
+}
+
 func generateEnvVars(port int, commonEnv []corev1.EnvVar) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	result = append(result, commonEnv...)
 	portString := strconv.Itoa(port)
+
+	vcapApplication := vCapApplication{}
+
+	vcapApplication.CfApi = "https://api.steventaylor.net"
+
+	data, _ := json.Marshal(vcapApplication)
+
 	result = append(result,
+
+		corev1.EnvVar{Name: "VCAP_APPLICATION", Value: string(data)},
 		corev1.EnvVar{Name: "VCAP_APP_HOST", Value: "0.0.0.0"},
 		corev1.EnvVar{Name: "VCAP_APP_PORT", Value: portString},
 		corev1.EnvVar{Name: "PORT", Value: portString},

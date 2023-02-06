@@ -38,7 +38,7 @@ func ForSpaceList(spaces []repositories.SpaceRecord, apiBaseURL, requestURL url.
 
 func ForSpace(space repositories.SpaceRecord, apiBaseURL url.URL) SpaceResponse {
 	return SpaceResponse{
-		Name:      space.Name,
+		Name:      space.DisplayName,
 		GUID:      space.GUID,
 		CreatedAt: space.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt: space.CreatedAt.UTC().Format(time.RFC3339),

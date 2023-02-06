@@ -388,7 +388,7 @@ func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage)
 }
 
 func appBelongsToSpace(app korifiv1alpha1.CFApp, spaceGUID string) bool {
-	return app.Namespace == spaceGUID
+	return app.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] == spaceGUID
 }
 
 func appMatchesName(app korifiv1alpha1.CFApp, name string) bool {

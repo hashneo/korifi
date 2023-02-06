@@ -3,6 +3,8 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/labels"
 	"time"
 
 	"code.cloudfoundry.org/korifi/api/authorization"
@@ -10,7 +12,6 @@ import (
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/tools/k8s"
 
-	"github.com/google/uuid"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,7 @@ type ListSpacesMessage struct {
 }
 
 type DeleteSpaceMessage struct {
-	GUID             string
+	Name             string
 	OrganizationGUID string
 }
 
@@ -45,6 +46,7 @@ type PatchSpaceMetadataMessage struct {
 }
 
 type SpaceRecord struct {
+	DisplayName      string
 	Name             string
 	GUID             string
 	OrganizationGUID string
@@ -79,7 +81,7 @@ func NewSpaceRepo(
 }
 
 func (r *SpaceRepo) CreateSpace(ctx context.Context, info authorization.Info, message CreateSpaceMessage) (SpaceRecord, error) {
-	_, err := r.orgRepo.GetOrg(ctx, info, message.OrganizationGUID)
+	cfOrg, err := r.orgRepo.GetOrg(ctx, info, message.OrganizationGUID)
 	if err != nil {
 		return SpaceRecord{}, fmt.Errorf("failed to get parent organization: %w", err)
 	}
@@ -92,7 +94,7 @@ func (r *SpaceRepo) CreateSpace(ctx context.Context, info authorization.Info, me
 	spaceCR, err := r.createSpaceCR(ctx, info, userClient, &korifiv1alpha1.CFSpace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      SpacePrefix + uuid.NewString(),
-			Namespace: message.OrganizationGUID,
+			Namespace: cfOrg.Namespace,
 		},
 		Spec: korifiv1alpha1.CFSpaceSpec{
 			DisplayName: message.Name,
@@ -103,9 +105,10 @@ func (r *SpaceRepo) CreateSpace(ctx context.Context, info authorization.Info, me
 	}
 
 	return SpaceRecord{
-		Name:             message.Name,
-		GUID:             spaceCR.Name,
-		OrganizationGUID: message.OrganizationGUID,
+		DisplayName:      spaceCR.Spec.DisplayName,
+		Name:             spaceCR.Name,
+		GUID:             spaceCR.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
+		OrganizationGUID: spaceCR.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		CreatedAt:        spaceCR.CreationTimestamp.Time,
 		UpdatedAt:        spaceCR.CreationTimestamp.Time,
 	}, nil
@@ -193,11 +196,11 @@ func (r *SpaceRepo) ListSpaces(ctx context.Context, info authorization.Info, mes
 			continue
 		}
 
-		if !matchesFilter(cfSpace.Namespace, message.OrganizationGUIDs) {
+		if !matchesFilter(cfSpace.Labels[korifiv1alpha1.CFOrgGUIDLabelKey], message.OrganizationGUIDs) {
 			continue
 		}
 
-		if !matchesFilter(cfSpace.Name, message.GUIDs) {
+		if !matchesFilter(cfSpace.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey], message.GUIDs) {
 			continue
 		}
 
@@ -216,35 +219,55 @@ func (r *SpaceRepo) ListSpaces(ctx context.Context, info authorization.Info, mes
 }
 
 func (r *SpaceRepo) GetSpace(ctx context.Context, info authorization.Info, spaceGUID string) (SpaceRecord, error) {
-	ns, err := r.namespaceRetriever.NamespaceFor(ctx, spaceGUID, SpaceResourceType)
-	if err != nil {
-		return SpaceRecord{}, err
-	}
-
+	/*
+		ns, err := r.namespaceRetriever.NamespaceFor(ctx, spaceGUID, SpaceResourceType)
+		if err != nil {
+			return SpaceRecord{}, err
+		}
+	*/
 	userClient, err := r.userClientFactory.BuildClient(info)
 	if err != nil {
 		return SpaceRecord{}, fmt.Errorf("get-space failed to build user client: %w", err)
 	}
 
-	cfSpace := korifiv1alpha1.CFSpace{}
-	err = userClient.Get(ctx, client.ObjectKey{Namespace: ns, Name: spaceGUID}, &cfSpace)
+	cfSpaceList := korifiv1alpha1.CFSpaceList{}
+
+	labelSelector, err := labels.ValidatedSelectorFromSet(map[string]string{
+		korifiv1alpha1.CFSpaceGUIDLabelKey: spaceGUID,
+	})
+
+	labelOption := client.ListOptions{LabelSelector: labelSelector}
+	err = userClient.List(ctx, &cfSpaceList, &labelOption)
+
 	if err != nil {
-		return SpaceRecord{}, fmt.Errorf("failed to get space: %w", apierrors.FromK8sError(err, SpaceResourceType))
+		return SpaceRecord{}, fmt.Errorf("get-space failed to build user client: %w", err)
 	}
 
-	return cfSpaceToSpaceRecord(cfSpace), nil
+	if len(cfSpaceList.Items) != 0 {
+		if err != nil {
+			return SpaceRecord{}, fmt.Errorf("more than 1 (or less) space returned for the space label")
+		}
+	}
+
+	return cfSpaceToSpaceRecord(cfSpaceList.Items[0]), nil
 }
 
 func cfSpaceToSpaceRecord(cfSpace korifiv1alpha1.CFSpace) SpaceRecord {
-	return SpaceRecord{
-		Name:             cfSpace.Spec.DisplayName,
-		GUID:             cfSpace.Name,
+
+	r := SpaceRecord{
+		DisplayName:      cfSpace.Spec.DisplayName,
+		Name:             cfSpace.Name,
+		GUID:             cfSpace.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		OrganizationGUID: cfSpace.Namespace,
 		Annotations:      cfSpace.Annotations,
 		Labels:           cfSpace.Labels,
 		CreatedAt:        cfSpace.CreationTimestamp.Time,
 		UpdatedAt:        cfSpace.CreationTimestamp.Time,
 	}
+
+	delete(cfSpace.Labels, korifiv1alpha1.CFSpaceGUIDLabelKey)
+
+	return r
 }
 
 func (r *SpaceRepo) DeleteSpace(ctx context.Context, info authorization.Info, message DeleteSpaceMessage) error {
@@ -255,7 +278,7 @@ func (r *SpaceRepo) DeleteSpace(ctx context.Context, info authorization.Info, me
 
 	err = userClient.Delete(ctx, &korifiv1alpha1.CFSpace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      message.GUID,
+			Name:      message.Name,
 			Namespace: message.OrganizationGUID,
 		},
 	})

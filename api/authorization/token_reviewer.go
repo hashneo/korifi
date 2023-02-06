@@ -28,13 +28,13 @@ func NewTokenReviewer(privilegedClient client.Client) *TokenReviewer {
 	return &TokenReviewer{privilegedClient: privilegedClient}
 }
 
-func (r *TokenReviewer) WhoAmI(ctx context.Context, token string) (Identity, error) {
+func (r *TokenReviewer) WhoAmI(ctx context.Context, token *Token) (Identity, error) {
 	tokenReview := &authv1.TokenReview{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "tokenReview",
 		},
 		Spec: authv1.TokenReviewSpec{
-			Token: token,
+			Token: string((*token).get()),
 		},
 	}
 	err := r.privilegedClient.Create(ctx, tokenReview)
@@ -59,8 +59,18 @@ func (r *TokenReviewer) WhoAmI(ctx context.Context, token string) (Identity, err
 		idName = nameSegments[len(nameSegments)-1]
 	}
 
+	var guid string
+
+	var x interface{} = *token
+
+	switch x.(type) {
+	case *JwtToken:
+		guid = ((*token).(*JwtToken)).getClaim("user_id")
+	}
+
 	return Identity{
 		Name: idName,
+		GUID: guid,
 		Kind: idKind,
 	}, nil
 }

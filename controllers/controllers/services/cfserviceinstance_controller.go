@@ -18,6 +18,7 @@ package services
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
@@ -68,6 +69,12 @@ func (r *CFServiceInstanceReconciler) ReconcileResource(ctx context.Context, cfS
 		cfServiceInstance.Status = bindSecretUnavailableStatus(cfServiceInstance, "UnknownError", "Error occurred while fetching secret: "+err.Error())
 		return ctrl.Result{}, err
 	}
+
+	if cfServiceInstance.Labels == nil {
+		cfServiceInstance.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfServiceInstance.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfServiceInstance.Namespace, "$1")
 
 	cfServiceInstance.Status = bindSecretAvailableStatus(cfServiceInstance)
 	return ctrl.Result{}, nil

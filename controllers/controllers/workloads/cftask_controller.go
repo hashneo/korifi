@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -89,6 +90,12 @@ func (r *CFTaskReconciler) ReconcileResource(ctx context.Context, cfTask *korifi
 		}
 		return ctrl.Result{}, err
 	}
+
+	if cfTask.Labels == nil {
+		cfTask.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfTask.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfTask.Namespace, "$1")
 
 	if cfTask.Spec.Canceled {
 		err := r.handleCancelation(ctx, cfTask)

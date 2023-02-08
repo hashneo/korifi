@@ -18,6 +18,7 @@ package networking
 
 import (
 	"context"
+	"regexp"
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
@@ -60,6 +61,12 @@ func (r *CFDomainReconciler) ReconcileResource(ctx context.Context, cfDomain *ko
 	if !cfDomain.GetDeletionTimestamp().IsZero() {
 		return r.finalizeCFDomain(ctx, log, cfDomain)
 	}
+
+	if cfDomain.Labels == nil {
+		cfDomain.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfDomain.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfDomain.Namespace, "$1")
 
 	err := k8s.AddFinalizer(ctx, log, r.client, cfDomain, CFDomainFinalizerName)
 	if err != nil {

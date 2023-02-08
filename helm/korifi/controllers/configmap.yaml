@@ -10,6 +10,7 @@ data:
     includeStatefulsetRunner: {{ .Values.statefulsetRunner.include }}
     includeContourRouter: {{ .Values.contourRouter.include }}
   korifi_controllers_config.yaml: |-
+    apiServerUrl: {{ .Values.api.apiServer.url }} 
     builderName: {{ .Values.controllers.reconcilers.build }}
     runnerName: {{ .Values.controllers.reconcilers.app }}
     cfProcessDefaults:

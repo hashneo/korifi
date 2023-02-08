@@ -49,6 +49,8 @@ type CreateServiceInstanceMessage struct {
 	SpaceGUID       string
 	ServicePlanGUID string
 	Credentials     map[string]string
+	SysLogDrainUrl  string
+	RouteServiceUrl string
 	Type            string
 	Tags            []string
 	Labels          map[string]string
@@ -85,6 +87,14 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 	}
 
 	cfServiceInstance := message.toCFServiceInstance()
+
+	// Convert the Space GUID to a namespace
+	ns, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return ServiceInstanceRecord{}, err
+	}
+
+	cfServiceInstance.Namespace = ns
 
 	switch cfServiceInstance.Spec.Type {
 	case korifiv1alpha1.UserProvidedType:
@@ -178,10 +188,15 @@ func (r *ServiceInstanceRepo) DeleteServiceInstance(ctx context.Context, authInf
 		return fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return err
+	}
+
 	serviceInstance := &korifiv1alpha1.CFServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.GUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 
@@ -196,8 +211,8 @@ func (m CreateServiceInstanceMessage) toCFServiceInstance() korifiv1alpha1.CFSer
 	guid := uuid.NewString()
 	return korifiv1alpha1.CFServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        guid,
-			Namespace:   m.SpaceGUID,
+			Name: guid,
+			//Namespace:   m.SpaceGUID,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},
@@ -255,7 +270,7 @@ func applyServiceInstanceListFilter(serviceInstanceList []korifiv1alpha1.CFServi
 	var filtered []korifiv1alpha1.CFServiceInstance
 	for _, serviceInstance := range serviceInstanceList {
 		if matchesFilter(serviceInstance.Spec.DisplayName, message.Names) &&
-			matchesFilter(serviceInstance.Namespace, message.SpaceGuids) {
+			matchesFilter(serviceInstance.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey], message.SpaceGuids) {
 			filtered = append(filtered, serviceInstance)
 		}
 	}

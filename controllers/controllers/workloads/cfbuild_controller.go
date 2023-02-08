@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/config"
@@ -79,6 +80,12 @@ func (r *CFBuildReconciler) ReconcileResource(ctx context.Context, cfBuild *kori
 		r.log.Error(err, "Error when fetching CFPackage")
 		return ctrl.Result{}, err
 	}
+
+	if cfBuild.Labels == nil {
+		cfBuild.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfBuild.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfBuild.Namespace, "$1")
 
 	err = controllerutil.SetControllerReference(cfPackage, cfBuild, r.scheme)
 	if err != nil {

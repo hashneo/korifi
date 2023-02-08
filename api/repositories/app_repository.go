@@ -212,7 +212,13 @@ func (f *AppRepo) GetAppByNameAndSpace(ctx context.Context, authInfo authorizati
 	}
 
 	appList := new(korifiv1alpha1.CFAppList)
-	err = userClient.List(ctx, appList, client.InNamespace(spaceGUID))
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, spaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
+	err = userClient.List(ctx, appList, client.InNamespace(namespace))
 	if err != nil {
 		return AppRecord{}, apierrors.FromK8sError(fmt.Errorf("get app: failed to list apps: %w", err), SpaceResourceType)
 	}
@@ -231,7 +237,9 @@ func (f *AppRepo) GetAppByNameAndSpace(ctx context.Context, authInfo authorizati
 		return AppRecord{}, fmt.Errorf("duplicate instances of app %q in space %q", appName, spaceGUID)
 	}
 
-	return cfAppToAppRecord(matchingApps[0]), nil
+	appRecord := cfAppToAppRecord(matchingApps[0])
+
+	return appRecord, nil
 }
 
 func (f *AppRepo) CreateApp(ctx context.Context, authInfo authorization.Info, appCreateMessage CreateAppMessage) (AppRecord, error) {
@@ -241,6 +249,14 @@ func (f *AppRepo) CreateApp(ctx context.Context, authInfo authorization.Info, ap
 	}
 
 	cfApp := appCreateMessage.toCFApp()
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, appCreateMessage.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
+	cfApp.Namespace = namespace
+
 	err = userClient.Create(ctx, &cfApp)
 	if err != nil {
 		if validationError, ok := webhooks.WebhookErrorToValidationError(err); ok {
@@ -255,7 +271,7 @@ func (f *AppRepo) CreateApp(ctx context.Context, authInfo authorization.Info, ap
 	_, err = f.CreateOrPatchAppEnvVars(ctx, authInfo, CreateOrPatchAppEnvVarsMessage{
 		AppGUID:              cfApp.Name,
 		AppEtcdUID:           cfApp.UID,
-		SpaceGUID:            cfApp.Namespace,
+		SpaceGUID:            appCreateMessage.SpaceGUID,
 		EnvironmentVariables: appCreateMessage.EnvironmentVariables,
 	})
 	if err != nil {
@@ -271,8 +287,13 @@ func (f *AppRepo) PatchApp(ctx context.Context, authInfo authorization.Info, app
 		return AppRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, appPatchMessage.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
 	app := korifiv1alpha1.CFApp{}
-	err = userClient.Get(ctx, client.ObjectKey{Namespace: appPatchMessage.SpaceGUID, Name: appPatchMessage.AppGUID}, &app)
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: appPatchMessage.AppGUID}, &app)
 	if err != nil {
 		return AppRecord{}, apierrors.FromK8sError(err, AppResourceType)
 	}
@@ -288,7 +309,7 @@ func (f *AppRepo) PatchApp(ctx context.Context, authInfo authorization.Info, app
 	_, err = f.CreateOrPatchAppEnvVars(ctx, authInfo, CreateOrPatchAppEnvVarsMessage{
 		AppGUID:              app.Name,
 		AppEtcdUID:           app.UID,
-		SpaceGUID:            app.Namespace,
+		SpaceGUID:            appPatchMessage.SpaceGUID,
 		EnvironmentVariables: appPatchMessage.EnvironmentVariables,
 	})
 	if err != nil {
@@ -409,16 +430,22 @@ func returnAppList(appList []korifiv1alpha1.CFApp) []AppRecord {
 }
 
 func (f *AppRepo) PatchAppEnvVars(ctx context.Context, authInfo authorization.Info, message PatchAppEnvVarsMessage) (AppEnvVarsRecord, error) {
-	secretObj := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GenerateEnvSecretName(message.AppGUID),
-			Namespace: message.SpaceGUID,
-		},
-	}
 
 	userClient, err := f.userClientFactory.BuildClient(authInfo)
 	if err != nil {
 		return AppEnvVarsRecord{}, fmt.Errorf("failed to build user client: %w", err)
+	}
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppEnvVarsRecord{}, err
+	}
+
+	secretObj := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      GenerateEnvSecretName(message.AppGUID),
+			Namespace: namespace,
+		},
 	}
 
 	_, err = controllerutil.CreateOrPatch(ctx, userClient, &secretObj, func() error {
@@ -447,6 +474,13 @@ func (f *AppRepo) CreateOrPatchAppEnvVars(ctx context.Context, authInfo authoriz
 		return AppEnvVarsRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, envVariables.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppEnvVarsRecord{}, err
+	}
+
+	secretObj.Namespace = namespace
+
 	_, err = controllerutil.CreateOrPatch(ctx, userClient, &secretObj, func() error {
 		secretObj.StringData = envVariables.EnvironmentVariables
 		return nil
@@ -464,8 +498,13 @@ func (f *AppRepo) PatchAppMetadata(ctx context.Context, authInfo authorization.I
 		return AppRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
 	app := new(korifiv1alpha1.CFApp)
-	err = userClient.Get(ctx, client.ObjectKey{Namespace: message.SpaceGUID, Name: message.AppGUID}, app)
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: message.AppGUID}, app)
 	if err != nil {
 		return AppRecord{}, fmt.Errorf("failed to get app: %w", apierrors.FromK8sError(err, AppResourceType))
 	}
@@ -486,10 +525,15 @@ func (f *AppRepo) SetCurrentDroplet(ctx context.Context, authInfo authorization.
 		return CurrentDropletRecord{}, fmt.Errorf("set-current-droplet: failed to create k8s user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return CurrentDropletRecord{}, err
+	}
+
 	cfApp := &korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.AppGUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 
@@ -517,10 +561,15 @@ func (f *AppRepo) SetAppDesiredState(ctx context.Context, authInfo authorization
 		return AppRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
 	cfApp := &korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.AppGUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 
@@ -535,15 +584,22 @@ func (f *AppRepo) SetAppDesiredState(ctx context.Context, authInfo authorization
 }
 
 func (f *AppRepo) DeleteApp(ctx context.Context, authInfo authorization.Info, message DeleteAppMessage) error {
-	cfApp := &korifiv1alpha1.CFApp{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      message.AppGUID,
-			Namespace: message.SpaceGUID,
-		},
-	}
+
 	userClient, err := f.userClientFactory.BuildClient(authInfo)
 	if err != nil {
 		return fmt.Errorf("failed to build user client: %w", err)
+	}
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return err
+	}
+
+	cfApp := &korifiv1alpha1.CFApp{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      message.AppGUID,
+			Namespace: namespace,
+		},
 	}
 
 	return apierrors.FromK8sError(userClient.Delete(ctx, cfApp), AppResourceType)
@@ -560,10 +616,15 @@ func (f *AppRepo) GetAppEnv(ctx context.Context, authInfo authorization.Info, ap
 		return AppEnvRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, app.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppEnvRecord{}, err
+	}
+
 	appEnvVarMap := map[string]string{}
 	if app.envSecretName != "" {
 		appEnvVarSecret := new(corev1.Secret)
-		err = userClient.Get(ctx, types.NamespacedName{Name: app.envSecretName, Namespace: app.SpaceGUID}, appEnvVarSecret)
+		err = userClient.Get(ctx, types.NamespacedName{Name: app.envSecretName, Namespace: namespace}, appEnvVarSecret)
 		if err != nil {
 			return AppEnvRecord{}, fmt.Errorf("error finding environment variable Secret %q for App %q: %w",
 				app.envSecretName,
@@ -576,7 +637,7 @@ func (f *AppRepo) GetAppEnv(ctx context.Context, authInfo authorization.Info, ap
 	systemEnvMap := map[string]interface{}{}
 	if app.vcapServiceSecretName != "" {
 		vcapServiceSecret := new(corev1.Secret)
-		err = userClient.Get(ctx, types.NamespacedName{Name: app.vcapServiceSecretName, Namespace: app.SpaceGUID}, vcapServiceSecret)
+		err = userClient.Get(ctx, types.NamespacedName{Name: app.vcapServiceSecretName, Namespace: namespace}, vcapServiceSecret)
 		if err != nil {
 			return AppEnvRecord{}, fmt.Errorf("error finding VCAP Service Secret %q for App %q: %w",
 				app.vcapServiceSecretName,
@@ -615,10 +676,13 @@ func GenerateEnvSecretName(appGUID string) string {
 
 func (m *CreateAppMessage) toCFApp() korifiv1alpha1.CFApp {
 	guid := uuid.NewString()
-	return korifiv1alpha1.CFApp{
+
+	namespace := SpacePrefix + m.SpaceGUID
+
+	cfApp := korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        guid,
-			Namespace:   m.SpaceGUID,
+			Namespace:   namespace,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},
@@ -635,13 +699,21 @@ func (m *CreateAppMessage) toCFApp() korifiv1alpha1.CFApp {
 			},
 		},
 	}
+
+	// TODO: Fix up later
+	//cfApp.Namespace = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(m.SpaceGUID, "$1")
+
+	return cfApp
 }
 
 func (m *PatchAppMessage) toCFApp() korifiv1alpha1.CFApp {
-	return korifiv1alpha1.CFApp{
+
+	namespace := SpacePrefix + m.SpaceGUID
+
+	cfApp := korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        m.AppGUID,
-			Namespace:   m.SpaceGUID,
+			Namespace:   namespace,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},
@@ -657,17 +729,18 @@ func (m *PatchAppMessage) toCFApp() korifiv1alpha1.CFApp {
 			},
 		},
 	}
+
+	return cfApp
 }
 
 func cfAppToAppRecord(cfApp korifiv1alpha1.CFApp) AppRecord {
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfApp.ObjectMeta)
-
 	return AppRecord{
 		GUID:        cfApp.Name,
 		EtcdUID:     cfApp.GetUID(),
 		Revision:    getLabelOrAnnotation(cfApp.GetAnnotations(), korifiv1alpha1.CFAppRevisionKey),
 		Name:        cfApp.Spec.DisplayName,
-		SpaceGUID:   cfApp.Namespace,
+		SpaceGUID:   cfApp.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		DropletGUID: cfApp.Spec.CurrentDropletRef.Name,
 		Labels:      cfApp.Labels,
 		Annotations: cfApp.Annotations,
@@ -690,11 +763,13 @@ func cfAppToAppRecord(cfApp korifiv1alpha1.CFApp) AppRecord {
 func appEnvVarsRecordToSecret(envVars CreateOrPatchAppEnvVarsMessage) corev1.Secret {
 	labels := make(map[string]string, 1)
 	labels[CFAppGUIDLabel] = envVars.AppGUID
+	//namespace := SpacePrefix + envVars.SpaceGUID
+
 	return corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      GenerateEnvSecretName(envVars.AppGUID),
-			Namespace: envVars.SpaceGUID,
-			Labels:    labels,
+			Name: GenerateEnvSecretName(envVars.AppGUID),
+			//Namespace: namespace,
+			Labels: labels,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: APIVersion,

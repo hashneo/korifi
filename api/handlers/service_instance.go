@@ -64,6 +64,9 @@ func (h *ServiceInstance) create(r *http.Request) (*routing.Response, error) {
 		return nil, apierrors.LogAndReturn(logger, err, "failed to decode payload")
 	}
 
+	if payload.Relationships.ServicePlan.Data == nil {
+		payload.Relationships.ServicePlan.Data = &payloads.RelationshipData{}
+	}
 	spaceGUID := payload.Relationships.Space.Data.GUID
 	_, err := h.spaceRepo.GetSpace(r.Context(), authInfo, spaceGUID)
 	if err != nil {

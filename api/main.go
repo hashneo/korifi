@@ -126,6 +126,7 @@ func main() {
 		nsPermissions,
 	)
 	podRepo := repositories.NewPodRepo(
+		namespaceRetriever,
 		userClientFactory,
 	)
 	cfAppConditionAwaiter := conditions.NewConditionAwaiter[*korifiv1alpha1.CFApp,

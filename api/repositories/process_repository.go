@@ -1,18 +1,17 @@
 package repositories
 
 import (
-	"context"
-	"errors"
-	"fmt"
-
 	"code.cloudfoundry.org/korifi/api/authorization"
 	apierrors "code.cloudfoundry.org/korifi/api/errors"
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/tools/k8s"
-
+	"context"
+	"errors"
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -138,9 +137,28 @@ func (r *ProcessRepo) ListProcesses(ctx context.Context, authInfo authorization.
 	processList := &korifiv1alpha1.CFProcessList{}
 	var matches []korifiv1alpha1.CFProcess
 	for ns := range nsList {
-		if message.SpaceGUID != "" && message.SpaceGUID != ns {
-			continue
+
+		if message.SpaceGUID != "" {
+			// Look for a CFSpace object that contains our space GUID. If not found
+			// then continue
+			cfSpaceList := korifiv1alpha1.CFSpaceList{}
+
+			labelSelector, err := labels.ValidatedSelectorFromSet(map[string]string{
+				korifiv1alpha1.CFSpaceGUIDLabelKey: message.SpaceGUID,
+			})
+
+			if err != nil {
+				continue
+			}
+
+			labelOption := client.ListOptions{LabelSelector: labelSelector}
+			err = userClient.List(ctx, &cfSpaceList, &labelOption)
+
+			if err != nil {
+				continue
+			}
 		}
+
 		err = userClient.List(ctx, processList, client.InNamespace(ns))
 		if k8serrors.IsForbidden(err) {
 			continue
@@ -191,9 +209,14 @@ func (r *ProcessRepo) CreateProcess(ctx context.Context, authInfo authorization.
 		return fmt.Errorf("get-process: failed to build user k8s client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return err
+	}
+
 	process := &korifiv1alpha1.CFProcess{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 		Spec: korifiv1alpha1.CFProcessSpec{
 			AppRef:      corev1.LocalObjectReference{Name: message.AppGUID},
@@ -244,10 +267,15 @@ func (r *ProcessRepo) PatchProcess(ctx context.Context, authInfo authorization.I
 		return ProcessRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return ProcessRecord{}, err
+	}
+
 	updatedProcess := &korifiv1alpha1.CFProcess{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.ProcessGUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 	err = k8s.PatchResource(ctx, userClient, updatedProcess, func() {

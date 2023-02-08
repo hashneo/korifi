@@ -18,6 +18,7 @@ package workloads
 
 import (
 	"context"
+	"regexp"
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/tools/k8s"
@@ -62,6 +63,12 @@ func (r *CFPackageReconciler) ReconcileResource(ctx context.Context, cfPackage *
 		r.log.Error(err, "Error when fetching CFApp")
 		return ctrl.Result{}, err
 	}
+
+	if cfPackage.Labels == nil {
+		cfPackage.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfPackage.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfPackage.Namespace, "$1")
 
 	err = controllerutil.SetControllerReference(&cfApp, cfPackage, r.scheme)
 	if err != nil {

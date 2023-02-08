@@ -20,6 +20,10 @@ type Relationship struct {
 	Data *RelationshipData `json:"data" validate:"required"`
 }
 
+type ServicePlanRelationship struct {
+	Data *RelationshipData `json:"data"`
+}
+
 type RelationshipData struct {
 	GUID string `json:"guid" validate:"required"`
 }

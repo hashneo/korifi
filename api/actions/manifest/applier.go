@@ -39,6 +39,11 @@ func (a *Applier) Apply(ctx context.Context, authInfo authorization.Info, spaceG
 		return err
 	}
 
+	// Since we need the SpaceGUID in applyProcess, set it.
+	if appState.App.SpaceGUID == "" {
+		appState.App.SpaceGUID = spaceGUID
+	}
+
 	if err := a.applyProcesses(ctx, authInfo, appInfo, appState); err != nil {
 		return err
 	}

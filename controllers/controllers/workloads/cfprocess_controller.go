@@ -30,9 +30,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"regexp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +57,23 @@ type CFProcessReconciler struct {
 	log              logr.Logger
 	controllerConfig *config.ControllerConfig
 	envBuilder       EnvBuilder
+}
+
+type vCapApplicationType struct {
+	ApplicationId   string   `json:"application_id"`
+	ApplicationName string   `json:"application_name"`
+	ApplicationUris []string `json:"application_uris"`
+	CfApi           string   `json:"cf_api"`
+	Limits          struct {
+		Fds int `json:"fds"`
+	} `json:"limits"`
+	Name             string      `json:"name"`
+	OrganizationId   string      `json:"organization_id"`
+	OrganizationName string      `json:"organization_name"`
+	SpaceId          string      `json:"space_id"`
+	SpaceName        string      `json:"space_name"`
+	Uris             []string    `json:"uris"`
+	Users            interface{} `json:"users"`
 }
 
 func NewCFProcessReconciler(
@@ -81,6 +100,12 @@ func (r *CFProcessReconciler) ReconcileResource(ctx context.Context, cfProcess *
 		r.log.Error(err, fmt.Sprintf("Error when trying to fetch CFApp %s/%s", cfProcess.Namespace, cfProcess.Spec.AppRef.Name))
 		return ctrl.Result{}, err
 	}
+
+	if cfProcess.Labels == nil {
+		cfProcess.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfProcess.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfProcess.Namespace, "$1")
 
 	err = controllerutil.SetControllerReference(cfApp, cfProcess, r.scheme)
 	if err != nil {
@@ -149,8 +174,65 @@ func (r *CFProcessReconciler) createOrPatchAppWorkload(ctx context.Context, cfAp
 		},
 	}
 
+	// Locate the space the Application was created in
+	cfSpaceList := korifiv1alpha1.CFSpaceList{}
+	labelSelector, err := labels.ValidatedSelectorFromSet(map[string]string{
+		korifiv1alpha1.CFSpaceGUIDLabelKey: cfApp.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = r.k8sClient.List(ctx, &cfSpaceList, &client.ListOptions{LabelSelector: labelSelector})
+
+	if err != nil || len(cfSpaceList.Items) != 1 {
+		r.log.Error(err, "Error when initializing AppWorkload: Unable to locate space")
+		return err
+	}
+
+	cfSpace := cfSpaceList.Items[0]
+
+	cfOrgList := korifiv1alpha1.CFOrgList{}
+	labelSelector, err = labels.ValidatedSelectorFromSet(map[string]string{
+		korifiv1alpha1.CFOrgGUIDLabelKey: cfSpace.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
+	})
+
+	if err != nil {
+		return err
+	}
+
+	err = r.k8sClient.List(ctx, &cfOrgList, &client.ListOptions{LabelSelector: labelSelector})
+
+	if err != nil || len(cfOrgList.Items) != 1 {
+		r.log.Error(err, "Error when initializing AppWorkload: Unable to locate org")
+		return err
+	}
+
+	cfOrg := cfOrgList.Items[0]
+
+	vcapApplication := vCapApplicationType{
+		ApplicationId:    cfApp.Name,
+		ApplicationName:  cfApp.Spec.DisplayName,
+		CfApi:            r.controllerConfig.ApiServerURL,
+		OrganizationId:   cfOrg.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
+		OrganizationName: cfOrg.Spec.DisplayName,
+		SpaceId:          cfSpace.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
+		SpaceName:        cfSpace.Spec.DisplayName,
+	}
+
+	var cfRoutesForProcess korifiv1alpha1.CFRouteList
+	err = r.k8sClient.List(ctx, &cfRoutesForProcess, client.InNamespace(cfApp.GetNamespace()), client.MatchingFields{shared.IndexRouteDestinationAppName: cfApp.Name})
+	if err != nil {
+		return err
+	}
+
+	for _, cfRoute := range cfRoutesForProcess.Items {
+		vcapApplication.ApplicationUris = append(vcapApplication.ApplicationUris, config.DefaultExternalProtocol+"://"+cfRoute.Status.URI)
+	}
+
 	var desiredAppWorkload *korifiv1alpha1.AppWorkload
-	desiredAppWorkload, err = r.generateAppWorkload(actualAppWorkload, cfApp, cfProcess, cfBuild, appPort, envVars)
+	desiredAppWorkload, err = r.generateAppWorkload(actualAppWorkload, cfApp, cfProcess, cfBuild, vcapApplication, appPort, envVars)
 	if err != nil { // untested
 		r.log.Error(err, "Error when initializing AppWorkload")
 		return err
@@ -204,9 +286,12 @@ func appWorkloadMutateFunction(actualAppWorkload, desiredAppWorkload *korifiv1al
 	}
 }
 
-func (r *CFProcessReconciler) generateAppWorkload(actualAppWorkload *korifiv1alpha1.AppWorkload, cfApp *korifiv1alpha1.CFApp, cfProcess *korifiv1alpha1.CFProcess, cfBuild *korifiv1alpha1.CFBuild, appPort int, envVars []corev1.EnvVar) (*korifiv1alpha1.AppWorkload, error) {
+func (r *CFProcessReconciler) generateAppWorkload(actualAppWorkload *korifiv1alpha1.AppWorkload, cfApp *korifiv1alpha1.CFApp, cfProcess *korifiv1alpha1.CFProcess, cfBuild *korifiv1alpha1.CFBuild, vcapApplication vCapApplicationType, appPort int, envVars []corev1.EnvVar) (*korifiv1alpha1.AppWorkload, error) {
 	var desiredAppWorkload korifiv1alpha1.AppWorkload
 	actualAppWorkload.DeepCopyInto(&desiredAppWorkload)
+
+	envVars = generateEnvVars(appPort, envVars)
+	envVars = gernateVcapApplication(vcapApplication, envVars)
 
 	desiredAppWorkload.Labels = make(map[string]string)
 	desiredAppWorkload.Labels[korifiv1alpha1.CFAppGUIDLabelKey] = cfApp.Name
@@ -240,8 +325,7 @@ func (r *CFProcessReconciler) generateAppWorkload(actualAppWorkload *korifiv1alp
 	if cfProcess.Spec.DesiredInstances != nil {
 		desiredAppWorkload.Spec.Instances = int32(*cfProcess.Spec.DesiredInstances)
 	}
-
-	desiredAppWorkload.Spec.Env = generateEnvVars(appPort, envVars)
+	desiredAppWorkload.Spec.Env = envVars
 	desiredAppWorkload.Spec.StartupProbe = startupProbe(cfProcess, appPort)
 	desiredAppWorkload.Spec.LivenessProbe = livenessProbe(cfProcess, appPort)
 	desiredAppWorkload.Spec.RunnerName = r.controllerConfig.RunnerName
@@ -315,21 +399,17 @@ func (r *CFProcessReconciler) getPort(ctx context.Context, cfProcess *korifiv1al
 	return 8080, nil
 }
 
-type vCapApplication struct {
-	ApplicationId   string        `json:"application_id"`
-	ApplicationName string        `json:"application_name"`
-	ApplicationUris []interface{} `json:"application_uris"`
-	CfApi           string        `json:"cf_api"`
-	Limits          struct {
-		Fds int `json:"fds"`
-	} `json:"limits"`
-	Name             string        `json:"name"`
-	OrganizationId   string        `json:"organization_id"`
-	OrganizationName string        `json:"organization_name"`
-	SpaceId          string        `json:"space_id"`
-	SpaceName        string        `json:"space_name"`
-	Uris             []interface{} `json:"uris"`
-	Users            interface{}   `json:"users"`
+func gernateVcapApplication(vcapApplication vCapApplicationType, commonEnv []corev1.EnvVar) []corev1.EnvVar {
+	var result []corev1.EnvVar
+	result = append(result, commonEnv...)
+
+	data, _ := json.Marshal(vcapApplication)
+
+	result = append(result,
+		corev1.EnvVar{Name: "VCAP_APPLICATION", Value: string(data)},
+	)
+
+	return result
 }
 
 func generateEnvVars(port int, commonEnv []corev1.EnvVar) []corev1.EnvVar {
@@ -337,15 +417,8 @@ func generateEnvVars(port int, commonEnv []corev1.EnvVar) []corev1.EnvVar {
 	result = append(result, commonEnv...)
 	portString := strconv.Itoa(port)
 
-	vcapApplication := vCapApplication{}
-
-	vcapApplication.CfApi = "https://api.steventaylor.net"
-
-	data, _ := json.Marshal(vcapApplication)
-
 	result = append(result,
 
-		corev1.EnvVar{Name: "VCAP_APPLICATION", Value: string(data)},
 		corev1.EnvVar{Name: "VCAP_APP_HOST", Value: "0.0.0.0"},
 		corev1.EnvVar{Name: "VCAP_APP_PORT", Value: portString},
 		corev1.EnvVar{Name: "PORT", Value: portString},

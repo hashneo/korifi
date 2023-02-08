@@ -23,12 +23,14 @@ const (
 )
 
 type PodRepo struct {
-	userClientFactory authorization.UserK8sClientFactory
+	namespaceRetriever NamespaceRetriever
+	userClientFactory  authorization.UserK8sClientFactory
 }
 
-func NewPodRepo(userClientFactory authorization.UserK8sClientFactory) *PodRepo {
+func NewPodRepo(namespaceRetriever NamespaceRetriever, userClientFactory authorization.UserK8sClientFactory) *PodRepo {
 	return &PodRepo{
-		userClientFactory: userClientFactory,
+		namespaceRetriever: namespaceRetriever,
+		userClientFactory:  userClientFactory,
 	}
 }
 
@@ -62,7 +64,13 @@ func (r *PodRepo) GetRuntimeLogsForApp(ctx context.Context, logger logr.Logger, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build labelSelector: %w", err)
 	}
-	listOpts := client.ListOptions{Namespace: message.SpaceGUID, LabelSelector: labelSelector}
+
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return []LogRecord{}, err
+	}
+
+	listOpts := client.ListOptions{Namespace: namespace, LabelSelector: labelSelector}
 
 	pods, err := r.listPods(ctx, authInfo, listOpts)
 	if err != nil {

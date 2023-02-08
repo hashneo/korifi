@@ -19,6 +19,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -73,6 +74,12 @@ func (r *CFServiceBindingReconciler) ReconcileResource(ctx context.Context, cfSe
 		// so we do not check for deletion timestamp before returning here.
 		return r.handleGetError(ctx, err, cfServiceBinding, BindingSecretAvailableCondition, "ServiceInstanceNotFound", "Service instance")
 	}
+
+	if cfServiceBinding.Labels == nil {
+		cfServiceBinding.Labels = map[string]string{}
+	}
+	//TODO: Find a way better way to do this!
+	cfServiceBinding.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfServiceBinding.Namespace, "$1")
 
 	err = controllerutil.SetOwnerReference(instance, cfServiceBinding, r.scheme)
 	if err != nil {

@@ -30,6 +30,7 @@ type ServiceBindingList struct {
 	AppGUIDs             string
 	ServiceInstanceGUIDs string
 	Include              string
+	LabelSector          string
 }
 
 func (l *ServiceBindingList) ToMessage() repositories.ListServiceBindingsMessage {
@@ -40,12 +41,13 @@ func (l *ServiceBindingList) ToMessage() repositories.ListServiceBindingsMessage
 }
 
 func (l *ServiceBindingList) SupportedKeys() []string {
-	return []string{"app_guids", "service_instance_guids", "include", "type"}
+	return []string{"app_guids", "service_instance_guids", "include", "type", "label_selector"}
 }
 
 func (l *ServiceBindingList) DecodeFromURLValues(values url.Values) error {
 	l.AppGUIDs = values.Get("app_guids")
 	l.ServiceInstanceGUIDs = values.Get("service_instance_guids")
 	l.Include = values.Get("include")
+	l.LabelSector = values.Get("label_selector")
 	return nil
 }

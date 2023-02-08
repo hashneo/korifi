@@ -1,10 +1,15 @@
 package config
 
 import (
+	"errors"
 	"path/filepath"
 	"time"
 
 	"code.cloudfoundry.org/korifi/tools"
+)
+
+const (
+	DefaultExternalProtocol = "https"
 )
 
 type ControllerConfig struct {
@@ -15,6 +20,7 @@ type ControllerConfig struct {
 	IncludeContourRouter     bool `yaml:"includeContourRouter"`
 
 	// core controllers
+	ApiServerURL                string            `yaml:"apiServerUrl"`
 	CFProcessDefaults           CFProcessDefaults `yaml:"cfProcessDefaults"`
 	CFRootNamespace             string            `yaml:"cfRootNamespace"`
 	ContainerRegistrySecretName string            `yaml:"containerRegistrySecretName"`
@@ -50,6 +56,9 @@ const (
 func LoadFromPath(path string) (*ControllerConfig, error) {
 	var config ControllerConfig
 	err := tools.LoadConfigInto(&config, path)
+
+	err = config.validate()
+
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +70,25 @@ func LoadFromPath(path string) (*ControllerConfig, error) {
 	return &config, nil
 }
 
-func (c ControllerConfig) WorkloadsTLSSecretNameWithNamespace() string {
+func (c *ControllerConfig) validate() error {
+	if c.ApiServerURL == "" {
+		return errors.New("ApiServerURL not specified")
+	}
+
+	// TODO: Sanitize the URL
+	c.ApiServerURL = DefaultExternalProtocol + "://" + c.ApiServerURL
+
+	return nil
+}
+
+func (c *ControllerConfig) WorkloadsTLSSecretNameWithNamespace() string {
 	if c.WorkloadsTLSSecretName == "" {
 		return ""
 	}
 	return filepath.Join(c.WorkloadsTLSSecretNamespace, c.WorkloadsTLSSecretName)
 }
 
-func (c ControllerConfig) ParseTaskTTL() (time.Duration, error) {
+func (c *ControllerConfig) ParseTaskTTL() (time.Duration, error) {
 	if c.TaskTTL == "" {
 		return defaultTaskTTL, nil
 	}
@@ -76,7 +96,7 @@ func (c ControllerConfig) ParseTaskTTL() (time.Duration, error) {
 	return tools.ParseDuration(c.TaskTTL)
 }
 
-func (c ControllerConfig) ParseJobTTL() (time.Duration, error) {
+func (c *ControllerConfig) ParseJobTTL() (time.Duration, error) {
 	if c.JobTTL == "" {
 		return defaultJobTTL, nil
 	}

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"code.cloudfoundry.org/korifi/api/authorization"
 	apierrors "code.cloudfoundry.org/korifi/api/errors"
@@ -128,8 +129,8 @@ func (m CreateRouteMessage) toCFRoute() korifiv1alpha1.CFRoute {
 			APIVersion: APIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        RoutePrefix + uuid.NewString(),
-			Namespace:   m.SpaceGUID,
+			Name: RoutePrefix + uuid.NewString(),
+			//Namespace:   m.SpaceGUID,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},
@@ -203,7 +204,7 @@ func applyRouteListFilter(routes []korifiv1alpha1.CFRoute, message ListRoutesMes
 
 	var filtered []korifiv1alpha1.CFRoute
 	for _, route := range routes {
-		if matchesFilter(route.Namespace, message.SpaceGUIDs) &&
+		if matchesFilter(route.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey], message.SpaceGUIDs) &&
 			matchesFilter(route.Spec.DomainRef.Name, message.DomainGUIDs) &&
 			matchesFilter(route.Spec.Host, message.Hosts) &&
 			matchesFilter(route.Spec.Path, message.Paths) {
@@ -237,8 +238,13 @@ func (f *RouteRepo) ListRoutesForApp(ctx context.Context, authInfo authorization
 		return []RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, spaceGUID, SpaceResourceType)
+	if err != nil {
+		return []RouteRecord{}, err
+	}
+
 	cfRouteList := &korifiv1alpha1.CFRouteList{}
-	err = userClient.List(ctx, cfRouteList, client.InNamespace(spaceGUID))
+	err = userClient.List(ctx, cfRouteList, client.InNamespace(namespace))
 	if err != nil {
 		return []RouteRecord{}, apierrors.FromK8sError(err, RouteResourceType)
 	}
@@ -286,9 +292,12 @@ func cfRouteToRouteRecord(cfRoute korifiv1alpha1.CFRoute) RouteRecord {
 		destinations = append(destinations, cfRouteDestinationToDestination(destination))
 	}
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfRoute.ObjectMeta)
+
+	SpaceGUID := regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfRoute.Namespace, "$1")
+
 	return RouteRecord{
 		GUID:      cfRoute.Name,
-		SpaceGUID: cfRoute.Namespace,
+		SpaceGUID: SpaceGUID,
 		Domain: DomainRecord{
 			GUID: cfRoute.Spec.DomainRef.Name,
 		},
@@ -320,6 +329,13 @@ func (f *RouteRepo) CreateRoute(ctx context.Context, authInfo authorization.Info
 		return RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return RouteRecord{}, err
+	}
+
+	cfRoute.Namespace = namespace
+
 	err = userClient.Create(ctx, &cfRoute)
 	if err != nil {
 		return RouteRecord{}, apierrors.FromK8sError(err, RouteResourceType)
@@ -333,10 +349,16 @@ func (f *RouteRepo) DeleteRoute(ctx context.Context, authInfo authorization.Info
 	if err != nil {
 		return fmt.Errorf("failed to build user client: %w", err)
 	}
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return err
+	}
+
 	err = userClient.Delete(ctx, &korifiv1alpha1.CFRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.GUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	})
 
@@ -362,10 +384,15 @@ func (f *RouteRepo) AddDestinationsToRoute(ctx context.Context, authInfo authori
 		return RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return RouteRecord{}, err
+	}
+
 	cfRoute := &korifiv1alpha1.CFRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.RouteGUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 	err = k8s.PatchResource(ctx, userClient, cfRoute, func() {
@@ -384,10 +411,15 @@ func (f *RouteRepo) RemoveDestinationFromRoute(ctx context.Context, authInfo aut
 		return RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return RouteRecord{}, err
+	}
+
 	cfRoute := &korifiv1alpha1.CFRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.RouteGUID,
-			Namespace: message.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 	err = userClient.Get(ctx, client.ObjectKeyFromObject(cfRoute), cfRoute)
@@ -477,8 +509,13 @@ func (f *RouteRepo) PatchRouteMetadata(ctx context.Context, authInfo authorizati
 		return RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return RouteRecord{}, err
+	}
+
 	route := new(korifiv1alpha1.CFRoute)
-	err = userClient.Get(ctx, client.ObjectKey{Namespace: message.SpaceGUID, Name: message.RouteGUID}, route)
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: message.RouteGUID}, route)
 	if err != nil {
 		return RouteRecord{}, fmt.Errorf("failed to get route: %w", apierrors.FromK8sError(err, RouteResourceType))
 	}

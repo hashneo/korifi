@@ -118,7 +118,15 @@ func (r *PackageRepo) CreatePackage(ctx context.Context, authInfo authorization.
 		return PackageRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return PackageRecord{}, err
+	}
+
 	cfPackage := message.toCFPackage()
+
+	cfPackage.Namespace = namespace
+
 	err = userClient.Create(ctx, &cfPackage)
 	if err != nil {
 		return PackageRecord{}, apierrors.FromK8sError(err, PackageResourceType)
@@ -248,8 +256,13 @@ func (r *PackageRepo) UpdatePackageSource(ctx context.Context, authInfo authoriz
 		return PackageRecord{}, fmt.Errorf("failed to build user k8s client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return PackageRecord{}, err
+	}
+
 	cfPackage := &korifiv1alpha1.CFPackage{}
-	if err = userClient.Get(ctx, client.ObjectKey{Name: message.GUID, Namespace: message.SpaceGUID}, cfPackage); err != nil {
+	if err = userClient.Get(ctx, client.ObjectKey{Name: message.GUID, Namespace: namespace}, cfPackage); err != nil {
 		return PackageRecord{}, fmt.Errorf("failed to get cf package: %w", apierrors.FromK8sError(err, PackageResourceType))
 	}
 
@@ -277,7 +290,7 @@ func (r *PackageRepo) cfPackageToPackageRecord(cfPackage korifiv1alpha1.CFPackag
 	return PackageRecord{
 		GUID:        cfPackage.Name,
 		UID:         cfPackage.UID,
-		SpaceGUID:   cfPackage.Namespace,
+		SpaceGUID:   cfPackage.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		Type:        string(cfPackage.Spec.Type),
 		AppGUID:     cfPackage.Spec.AppRef.Name,
 		State:       state,

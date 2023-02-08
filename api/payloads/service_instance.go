@@ -7,17 +7,19 @@ import (
 )
 
 type ServiceInstanceCreate struct {
-	Name          string                       `json:"name" validate:"required"`
-	Type          string                       `json:"type" validate:"required,oneof=user-provided managed"`
-	Tags          []string                     `json:"tags" validate:"serviceinstancetaglength"`
-	Credentials   map[string]string            `json:"credentials"`
-	Relationships ServiceInstanceRelationships `json:"relationships" validate:"required"`
-	Metadata      Metadata                     `json:"metadata"`
+	Name            string                       `json:"name" validate:"required"`
+	Type            string                       `json:"type" validate:"required,oneof=user-provided managed"`
+	Tags            []string                     `json:"tags" validate:"serviceinstancetaglength"`
+	Credentials     map[string]string            `json:"credentials"`
+	SysLogDrainUrl  string                       `json:"syslog_drain_url"`
+	RouteServiceUrl string                       `json:"route_service_url"`
+	Relationships   ServiceInstanceRelationships `json:"relationships" validate:"required"`
+	Metadata        Metadata                     `json:"metadata"`
 }
 
 type ServiceInstanceRelationships struct {
-	Space       Relationship `json:"space" validate:"required"`
-	ServicePlan Relationship `json:"service_plan" validate:"omitempty"`
+	Space       Relationship            `json:"space" validate:"required"`
+	ServicePlan ServicePlanRelationship `json:"service_plan" validate:"omitempty"`
 }
 
 func (p ServiceInstanceCreate) ToServiceInstanceCreateMessage() repositories.CreateServiceInstanceMessage {
@@ -26,6 +28,8 @@ func (p ServiceInstanceCreate) ToServiceInstanceCreateMessage() repositories.Cre
 		SpaceGUID:       p.Relationships.Space.Data.GUID,
 		ServicePlanGUID: p.Relationships.ServicePlan.Data.GUID,
 		Credentials:     p.Credentials,
+		SysLogDrainUrl:  p.SysLogDrainUrl,
+		RouteServiceUrl: p.RouteServiceUrl,
 		Type:            p.Type,
 		Tags:            p.Tags,
 		Labels:          p.Metadata.Labels,

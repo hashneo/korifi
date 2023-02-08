@@ -169,6 +169,7 @@ type ListAppsMessage struct {
 	Names      []string
 	Guids      []string
 	SpaceGuids []string
+	Labels     []string
 }
 
 type byName []AppRecord
@@ -248,12 +249,12 @@ func (f *AppRepo) CreateApp(ctx context.Context, authInfo authorization.Info, ap
 		return AppRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
-	cfApp := appCreateMessage.toCFApp()
-
 	namespace, err := f.namespaceRetriever.NameFor(ctx, appCreateMessage.SpaceGUID, SpaceResourceType)
 	if err != nil {
 		return AppRecord{}, err
 	}
+
+	cfApp := appCreateMessage.toCFApp(namespace)
 
 	cfApp.Namespace = namespace
 
@@ -352,54 +353,44 @@ func (f *AppRepo) ListApps(ctx context.Context, authInfo authorization.Info, mes
 }
 
 func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage) []korifiv1alpha1.CFApp {
-	nameFilterSpecified := len(message.Names) > 0
-	guidsFilterSpecified := len(message.Guids) > 0
-	spaceGUIDFilterSpecified := len(message.SpaceGuids) > 0
 
-	var filtered []korifiv1alpha1.CFApp
+	var filtered = appList
 
-	if guidsFilterSpecified {
-		for _, app := range appList {
-			for _, guid := range message.Guids {
-				if appMatchesGUID(app, guid) {
-					filtered = append(filtered, app)
+	if len(message.SpaceGuids) > 0 {
+		for index := len(filtered) - 1; index >= 0; index-- {
+			for _, spaceGUID := range message.SpaceGuids {
+				if !appBelongsToSpace(filtered[index], spaceGUID) {
+					filtered = append(filtered[:index], filtered[index+1:]...)
 				}
 			}
 		}
 	}
 
-	if guidsFilterSpecified && len(filtered) == 0 {
-		return filtered
-	}
-
-	if len(filtered) > 0 {
-		appList = filtered
-		filtered = []korifiv1alpha1.CFApp{}
-	}
-
-	if !nameFilterSpecified && !spaceGUIDFilterSpecified {
-		return appList
-	}
-
-	for _, app := range appList {
-		if nameFilterSpecified && spaceGUIDFilterSpecified {
-			for _, name := range message.Names {
-				for _, spaceGUID := range message.SpaceGuids {
-					if appBelongsToSpace(app, spaceGUID) && appMatchesName(app, name) {
-						filtered = append(filtered, app)
-					}
+	if len(message.Guids) > 0 {
+		for index := len(filtered) - 1; index >= 0; index-- {
+			for _, guid := range message.Guids {
+				if !appMatchesGUID(filtered[index], guid) {
+					filtered = append(filtered[:index], filtered[index+1:]...)
 				}
 			}
-		} else if nameFilterSpecified {
+		}
+	}
+
+	if len(message.Names) > 0 {
+		for index := len(filtered) - 1; index >= 0; index-- {
 			for _, name := range message.Names {
-				if appMatchesName(app, name) {
-					filtered = append(filtered, app)
+				if !appMatchesName(filtered[index], name) {
+					filtered = append(filtered[:index], filtered[index+1:]...)
 				}
 			}
-		} else if spaceGUIDFilterSpecified {
-			for _, spaceGUID := range message.SpaceGuids {
-				if appBelongsToSpace(app, spaceGUID) {
-					filtered = append(filtered, app)
+		}
+	}
+
+	if len(message.Labels) > 0 {
+		for index := len(filtered) - 1; index >= 0; index-- {
+			for _, label := range message.Labels {
+				if !appMatchesLabel(filtered[index].Labels, label) {
+					filtered = append(filtered[:index], filtered[index+1:]...)
 				}
 			}
 		}
@@ -414,6 +405,10 @@ func appBelongsToSpace(app korifiv1alpha1.CFApp, spaceGUID string) bool {
 
 func appMatchesName(app korifiv1alpha1.CFApp, name string) bool {
 	return app.Spec.DisplayName == name
+}
+
+func appMatchesLabel(labels map[string]string, query string) bool {
+	return labelsFilter(labels, query)
 }
 
 func appMatchesGUID(app korifiv1alpha1.CFApp, guid string) bool {
@@ -467,7 +462,6 @@ func (f *AppRepo) PatchAppEnvVars(ctx context.Context, authInfo authorization.In
 }
 
 func (f *AppRepo) CreateOrPatchAppEnvVars(ctx context.Context, authInfo authorization.Info, envVariables CreateOrPatchAppEnvVarsMessage) (AppEnvVarsRecord, error) {
-	secretObj := appEnvVarsRecordToSecret(envVariables)
 
 	userClient, err := f.userClientFactory.BuildClient(authInfo)
 	if err != nil {
@@ -478,6 +472,8 @@ func (f *AppRepo) CreateOrPatchAppEnvVars(ctx context.Context, authInfo authoriz
 	if err != nil {
 		return AppEnvVarsRecord{}, err
 	}
+
+	secretObj := appEnvVarsRecordToSecret(namespace, envVariables)
 
 	secretObj.Namespace = namespace
 
@@ -674,10 +670,10 @@ func GenerateEnvSecretName(appGUID string) string {
 	return appGUID + "-env"
 }
 
-func (m *CreateAppMessage) toCFApp() korifiv1alpha1.CFApp {
+func (m *CreateAppMessage) toCFApp(namespace string) korifiv1alpha1.CFApp {
 	guid := uuid.NewString()
 
-	namespace := SpacePrefix + m.SpaceGUID
+	//namespace := SpacePrefix + m.SpaceGUID
 
 	cfApp := korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
@@ -760,16 +756,16 @@ func cfAppToAppRecord(cfApp korifiv1alpha1.CFApp) AppRecord {
 	}
 }
 
-func appEnvVarsRecordToSecret(envVars CreateOrPatchAppEnvVarsMessage) corev1.Secret {
+func appEnvVarsRecordToSecret(namespace string, envVars CreateOrPatchAppEnvVarsMessage) corev1.Secret {
 	labels := make(map[string]string, 1)
 	labels[CFAppGUIDLabel] = envVars.AppGUID
 	//namespace := SpacePrefix + envVars.SpaceGUID
 
 	return corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: GenerateEnvSecretName(envVars.AppGUID),
-			//Namespace: namespace,
-			Labels: labels,
+			Name:      GenerateEnvSecretName(envVars.AppGUID),
+			Namespace: namespace,
+			Labels:    labels,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: APIVersion,

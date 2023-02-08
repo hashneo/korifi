@@ -60,6 +60,7 @@ type CreateServiceInstanceMessage struct {
 type ListServiceInstanceMessage struct {
 	Names      []string
 	SpaceGuids []string
+	Labels     []string
 }
 
 type DeleteServiceInstanceMessage struct {
@@ -231,7 +232,7 @@ func cfServiceInstanceToServiceInstanceRecord(cfServiceInstance korifiv1alpha1.C
 	return ServiceInstanceRecord{
 		Name:        cfServiceInstance.Spec.DisplayName,
 		GUID:        cfServiceInstance.Name,
-		SpaceGUID:   cfServiceInstance.Namespace,
+		SpaceGUID:   cfServiceInstance.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		SecretName:  cfServiceInstance.Spec.SecretName,
 		ServicePlan: cfServiceInstance.Spec.ServicePlan,
 		Tags:        cfServiceInstance.Spec.Tags,
@@ -270,7 +271,8 @@ func applyServiceInstanceListFilter(serviceInstanceList []korifiv1alpha1.CFServi
 	var filtered []korifiv1alpha1.CFServiceInstance
 	for _, serviceInstance := range serviceInstanceList {
 		if matchesFilter(serviceInstance.Spec.DisplayName, message.Names) &&
-			matchesFilter(serviceInstance.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey], message.SpaceGuids) {
+			matchesFilter(serviceInstance.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey], message.SpaceGuids) &&
+			labelsFilters(serviceInstance.Labels, message.Labels) {
 			filtered = append(filtered, serviceInstance)
 		}
 	}

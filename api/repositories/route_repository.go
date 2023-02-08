@@ -122,15 +122,15 @@ type DeleteRouteMessage struct {
 	SpaceGUID string
 }
 
-func (m CreateRouteMessage) toCFRoute() korifiv1alpha1.CFRoute {
+func (m CreateRouteMessage) toCFRoute(namespace string) korifiv1alpha1.CFRoute {
 	return korifiv1alpha1.CFRoute{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       Kind,
 			APIVersion: APIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: RoutePrefix + uuid.NewString(),
-			//Namespace:   m.SpaceGUID,
+			Name:        RoutePrefix + uuid.NewString(),
+			Namespace:   namespace,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},
@@ -323,7 +323,6 @@ func cfRouteDestinationToDestination(cfRouteDestination korifiv1alpha1.Destinati
 }
 
 func (f *RouteRepo) CreateRoute(ctx context.Context, authInfo authorization.Info, message CreateRouteMessage) (RouteRecord, error) {
-	cfRoute := message.toCFRoute()
 	userClient, err := f.userClientFactory.BuildClient(authInfo)
 	if err != nil {
 		return RouteRecord{}, fmt.Errorf("failed to build user client: %w", err)
@@ -333,6 +332,8 @@ func (f *RouteRepo) CreateRoute(ctx context.Context, authInfo authorization.Info
 	if err != nil {
 		return RouteRecord{}, err
 	}
+
+	cfRoute := message.toCFRoute(namespace)
 
 	cfRoute.Namespace = namespace
 

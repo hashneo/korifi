@@ -276,10 +276,15 @@ func (r *SpaceRepo) DeleteSpace(ctx context.Context, info authorization.Info, me
 		return fmt.Errorf("failed to build user client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.OrganizationGUID, OrgResourceType)
+	if err != nil {
+		return err
+	}
+
 	err = userClient.Delete(ctx, &korifiv1alpha1.CFSpace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.Name,
-			Namespace: message.OrganizationGUID,
+			Namespace: namespace,
 		},
 	})
 

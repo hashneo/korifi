@@ -181,7 +181,12 @@ func (r *RoleRepo) validateOrgRequirements(ctx context.Context, role CreateRoleM
 		return apierrors.AsUnprocessableEntity(err, "space not found", apierrors.NotFoundError{}, apierrors.ForbiddenError{})
 	}
 
-	hasOrgBinding, err := r.authorizedInChecker.AuthorizedIn(ctx, userIdentity, space.OrganizationGUID)
+	orgNamespace, err := r.namespaceRetriever.NameFor(ctx, space.OrganizationGUID, OrgResourceType)
+	if err != nil {
+		return err
+	}
+
+	hasOrgBinding, err := r.authorizedInChecker.AuthorizedIn(ctx, userIdentity, orgNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to check for role in parent org: %w", err)
 	}

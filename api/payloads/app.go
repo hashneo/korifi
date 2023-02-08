@@ -68,6 +68,7 @@ func (a *AppList) ToMessage() repositories.ListAppsMessage {
 		Names:      ParseArrayParam(a.Names),
 		Guids:      ParseArrayParam(a.GUIDs),
 		SpaceGuids: ParseArrayParam(a.SpaceGuids),
+		Labels:     ParseArrayParam(a.LabelSelectors),
 	}
 }
 

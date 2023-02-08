@@ -82,12 +82,12 @@ type ListServiceBindingsMessage struct {
 	ServiceInstanceGUIDs []string
 }
 
-func (m CreateServiceBindingMessage) toCFServiceBinding() *korifiv1alpha1.CFServiceBinding {
+func (m CreateServiceBindingMessage) toCFServiceBinding(namespace string) *korifiv1alpha1.CFServiceBinding {
 	guid := uuid.NewString()
 	return &korifiv1alpha1.CFServiceBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      guid,
-			Namespace: m.SpaceGUID,
+			Namespace: namespace,
 			Labels:    map[string]string{LabelServiceBindingProvisionedService: "true"},
 		},
 		Spec: korifiv1alpha1.CFServiceBindingSpec{
@@ -108,7 +108,14 @@ func (r *ServiceBindingRepo) CreateServiceBinding(ctx context.Context, authInfo 
 		return ServiceBindingRecord{}, fmt.Errorf("failed to build user client: %w", err)
 	}
 
-	cfServiceBinding := message.toCFServiceBinding()
+	namespace, err := r.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return ServiceBindingRecord{}, err
+	}
+
+	cfServiceBinding := message.toCFServiceBinding(namespace)
+
+	cfServiceBinding.Namespace = namespace
 
 	cfApp := new(korifiv1alpha1.CFApp)
 	err = userClient.Get(ctx, types.NamespacedName{Name: cfServiceBinding.Spec.AppRef.Name, Namespace: cfServiceBinding.Namespace}, cfApp)
@@ -175,7 +182,7 @@ func cfServiceBindingToRecord(binding *korifiv1alpha1.CFServiceBinding) ServiceB
 		Name:                binding.Spec.DisplayName,
 		AppGUID:             binding.Spec.AppRef.Name,
 		ServiceInstanceGUID: binding.Spec.Service.Name,
-		SpaceGUID:           binding.Namespace,
+		SpaceGUID:           binding.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
 		LastOperation: ServiceBindingLastOperation{

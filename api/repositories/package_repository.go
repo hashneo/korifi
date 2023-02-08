@@ -76,7 +76,7 @@ type CreatePackageMessage struct {
 	Metadata  Metadata
 }
 
-func (message CreatePackageMessage) toCFPackage() korifiv1alpha1.CFPackage {
+func (message CreatePackageMessage) toCFPackage(namespace string) korifiv1alpha1.CFPackage {
 	guid := uuid.NewString()
 	pkg := korifiv1alpha1.CFPackage{
 		TypeMeta: metav1.TypeMeta{
@@ -85,7 +85,7 @@ func (message CreatePackageMessage) toCFPackage() korifiv1alpha1.CFPackage {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        guid,
-			Namespace:   message.SpaceGUID,
+			Namespace:   namespace,
 			Labels:      message.Metadata.Labels,
 			Annotations: message.Metadata.Annotations,
 		},
@@ -123,7 +123,7 @@ func (r *PackageRepo) CreatePackage(ctx context.Context, authInfo authorization.
 		return PackageRecord{}, err
 	}
 
-	cfPackage := message.toCFPackage()
+	cfPackage := message.toCFPackage(namespace)
 
 	cfPackage.Namespace = namespace
 

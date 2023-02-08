@@ -49,6 +49,7 @@ func (l *ServiceInstanceList) ToMessage() repositories.ListServiceInstanceMessag
 	return repositories.ListServiceInstanceMessage{
 		Names:      ParseArrayParam(l.Names),
 		SpaceGuids: ParseArrayParam(l.SpaceGuids),
+		Labels:     ParseArrayParam(l.LabelSelector),
 	}
 }
 

@@ -203,7 +203,6 @@ func (b *BuildRepo) cfBuildToBuildRecord(cfBuild korifiv1alpha1.CFBuild) BuildRe
 }
 
 func (b *BuildRepo) CreateBuild(ctx context.Context, authInfo authorization.Info, message CreateBuildMessage) (BuildRecord, error) {
-	cfBuild := message.toCFBuild()
 	userClient, err := b.userClientFactory.BuildClient(authInfo)
 	if err != nil {
 		return BuildRecord{}, fmt.Errorf("failed to build user k8s client: %w", err)
@@ -213,6 +212,8 @@ func (b *BuildRepo) CreateBuild(ctx context.Context, authInfo authorization.Info
 	if err != nil {
 		return BuildRecord{}, err
 	}
+
+	cfBuild := message.toCFBuild(namespace)
 
 	cfBuild.Namespace = namespace
 
@@ -234,12 +235,12 @@ type CreateBuildMessage struct {
 	Annotations     map[string]string
 }
 
-func (m CreateBuildMessage) toCFBuild() korifiv1alpha1.CFBuild {
+func (m CreateBuildMessage) toCFBuild(namespace string) korifiv1alpha1.CFBuild {
 	guid := uuid.NewString()
 	return korifiv1alpha1.CFBuild{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: guid,
-			//Namespace:   m.SpaceGUID,
+			Name:        guid,
+			Namespace:   namespace,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,
 		},

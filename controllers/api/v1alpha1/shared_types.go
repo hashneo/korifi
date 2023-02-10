@@ -18,6 +18,8 @@ const (
 	CFOrgGUIDLabelKey       = "korifi.cloudfoundry.org/org-guid"
 	CFSpaceGUIDLabelKey     = "korifi.cloudfoundry.org/space-guid"
 
+	CFBindingTypeLabelKey = "korifi.cloudfoundry.org/binding-type"
+
 	StagingConditionType   = "Staging"
 	ReadyConditionType     = "Ready"
 	SucceededConditionType = "Succeeded"

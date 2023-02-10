@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"code.cloudfoundry.org/korifi/api/authorization"
 	apierrors "code.cloudfoundry.org/korifi/api/errors"
@@ -41,6 +42,7 @@ func NewDomainRepo(
 type DomainRecord struct {
 	Name        string
 	GUID        string
+	OrgGUID     string
 	Labels      map[string]string
 	Annotations map[string]string
 	Namespace   string
@@ -50,6 +52,7 @@ type DomainRecord struct {
 
 type CreateDomainMessage struct {
 	Name     string
+	OrgGUID  string
 	Metadata Metadata
 }
 
@@ -98,6 +101,13 @@ func (r *DomainRepo) CreateDomain(ctx context.Context, authInfo authorization.In
 		Spec: korifiv1alpha1.CFDomainSpec{
 			Name: message.Name,
 		},
+	}
+
+	if message.OrgGUID != "" {
+		if cfDomain.Labels == nil {
+			cfDomain.Labels = map[string]string{}
+		}
+		cfDomain.Labels[korifiv1alpha1.CFOrgGUIDLabelKey] = message.OrgGUID
 	}
 
 	err = userClient.Create(ctx, cfDomain)
@@ -227,13 +237,28 @@ func returnDomainList(domainList []korifiv1alpha1.CFDomain) []DomainRecord {
 
 func cfDomainToDomainRecord(cfDomain *korifiv1alpha1.CFDomain) DomainRecord {
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfDomain.ObjectMeta)
-	return DomainRecord{
+	r := DomainRecord{
 		Name:        cfDomain.Spec.Name,
 		GUID:        cfDomain.Name,
+		OrgGUID:     cfDomain.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		Namespace:   cfDomain.Namespace,
 		CreatedAt:   cfDomain.CreationTimestamp.UTC().Format(TimestampFormat),
 		UpdatedAt:   updatedAtTime,
 		Labels:      cfDomain.Labels,
 		Annotations: cfDomain.Annotations,
 	}
+
+	for label, _ := range r.Labels {
+		if strings.Contains(label, "korifi.cloudfoundry.org") {
+			delete(r.Labels, label)
+		}
+	}
+
+	for annotation, _ := range r.Annotations {
+		if strings.Contains(annotation, "kubernetes.io") {
+			delete(r.Annotations, annotation)
+		}
+	}
+
+	return r
 }

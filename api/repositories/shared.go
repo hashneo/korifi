@@ -95,18 +95,18 @@ func labelsFilters(labels map[string]string, query []string) bool {
 	}
 
 	for _, value := range query {
-		if labelsFilter(labels, value) {
-			return true
+		if !labelsFilter(labels, value) {
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 func labelsFilter(labels map[string]string, query string) bool {
 
 	// TODO: This is a simple query tool and needs to be enhanced
-	re := regexp.MustCompile(`(^[a-zA-Z0-9./-]+)(!{0,1}={1,2})([a-zA-Z0-9./-]+)$`)
+	re := regexp.MustCompile(`(^[a-zA-Z0-9./-_]+)(!{0,1}={1,2})([a-zA-Z0-9./-_]+)$`)
 
 	matches := re.FindStringSubmatch(query)
 	if matches != nil {

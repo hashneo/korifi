@@ -18,18 +18,24 @@ func (c *DomainCreate) ToMessage() (repositories.CreateDomainMessage, error) {
 	if c.Internal {
 		return repositories.CreateDomainMessage{}, errors.New("internal domains are not supported")
 	}
-
-	if len(c.Relationships) > 0 {
-		return repositories.CreateDomainMessage{}, errors.New("private domains are not supported")
-	}
-
-	return repositories.CreateDomainMessage{
+	/*
+		if len(c.Relationships) > 0 {
+			return repositories.CreateDomainMessage{}, errors.New("private domains are not supported")
+		}
+	*/
+	m := repositories.CreateDomainMessage{
 		Name: c.Name,
+
 		Metadata: repositories.Metadata{
 			Labels:      c.Metadata.Labels,
 			Annotations: c.Metadata.Annotations,
 		},
-	}, nil
+	}
+	if value, present := c.Relationships["organization"]; present {
+		m.OrgGUID = value.Data.GUID
+	}
+
+	return m, nil
 }
 
 type DomainUpdate struct {
@@ -48,6 +54,7 @@ func (c *DomainUpdate) ToMessage(domainGUID string) repositories.UpdateDomainMes
 
 type DomainList struct {
 	Names string
+	Page  string
 }
 
 func (d *DomainList) ToMessage() repositories.ListDomainsMessage {
@@ -57,10 +64,11 @@ func (d *DomainList) ToMessage() repositories.ListDomainsMessage {
 }
 
 func (d *DomainList) SupportedKeys() []string {
-	return []string{"names"}
+	return []string{"names", "page"}
 }
 
 func (d *DomainList) DecodeFromURLValues(values url.Values) error {
 	d.Names = values.Get("names")
+	d.Page = values.Get("page")
 	return nil
 }

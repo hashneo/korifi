@@ -116,20 +116,42 @@ func (h *ServiceBinding) list(r *http.Request) (*routing.Response, error) {
 	}
 
 	var appRecords []repositories.AppRecord
-	if listFilter.Include != "" && len(serviceBindingList) > 0 {
-		listAppsMessage := repositories.ListAppsMessage{}
+	var serviceInstanceRecords []repositories.ServiceInstanceRecord
 
-		for _, serviceBinding := range serviceBindingList {
-			listAppsMessage.Guids = append(listAppsMessage.Guids, serviceBinding.AppGUID)
-		}
+	if listFilter.Include != "" {
 
-		appRecords, err = h.appRepo.ListApps(r.Context(), authInfo, listAppsMessage)
-		if err != nil {
-			return nil, apierrors.LogAndReturn(logger, err, fmt.Sprintf("failed to list %s", repositories.AppResourceType))
+		for _, include := range payloads.ParseArrayParam(listFilter.Include) {
+
+			if include == "app" && len(serviceBindingList) > 0 {
+				listAppsMessage := repositories.ListAppsMessage{}
+
+				for _, serviceBinding := range serviceBindingList {
+					listAppsMessage.Guids = append(listAppsMessage.Guids, serviceBinding.AppGUID)
+				}
+
+				appRecords, err = h.appRepo.ListApps(r.Context(), authInfo, listAppsMessage)
+				if err != nil {
+					return nil, apierrors.LogAndReturn(logger, err, fmt.Sprintf("failed to list %s", repositories.AppResourceType))
+				}
+			}
+
+			if include == "service_instance" && len(serviceBindingList) > 0 {
+				listServiceInstanceMessage := repositories.ListServiceInstanceMessage{}
+
+				for _, serviceBinding := range serviceBindingList {
+					listServiceInstanceMessage.Guids = append(listServiceInstanceMessage.Guids, serviceBinding.ServiceInstanceGUID)
+				}
+
+				serviceInstanceRecords, err = h.serviceInstanceRepo.ListServiceInstances(r.Context(), authInfo, listServiceInstanceMessage)
+				if err != nil {
+					return nil, apierrors.LogAndReturn(logger, err, fmt.Sprintf("failed to list %s", repositories.AppResourceType))
+				}
+			}
+
 		}
 	}
 
-	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForServiceBindingList(serviceBindingList, appRecords, h.serverURL, *r.URL)), nil
+	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForServiceBindingList(serviceBindingList, appRecords, serviceInstanceRecords, h.serverURL, *r.URL)), nil
 }
 
 func (h *ServiceBinding) UnauthenticatedRoutes() []routing.Route {

@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	OrgsPath       = "/v3/organizations"
-	OrgPath        = "/v3/organizations/{guid}"
-	OrgDomainsPath = "/v3/organizations/{guid}/domains"
+	OrgsPath              = "/v3/organizations"
+	OrgPath               = "/v3/organizations/{guid}"
+	OrgDomainsPath        = "/v3/organizations/{guid}/domains"
+	OrgDefaultDomainsPath = "/v3/organizations/{guid}/domains/default"
 )
 
 //counterfeiter:generate -o fake -fake-name OrgRepository . CFOrgRepository
@@ -174,7 +175,45 @@ func (h *Org) listDomains(r *http.Request) (*routing.Response, error) {
 		return nil, apierrors.LogAndReturn(logger, err, "Failed to fetch domain(s) from Kubernetes")
 	}
 
+	for idx, _ := range domainList {
+		domainList[idx].OrgGUID = orgGUID
+	}
+
 	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForDomainList(domainList, h.apiBaseURL, *r.URL)), nil
+}
+
+func (h *Org) getDefaultDomain(r *http.Request) (*routing.Response, error) {
+	authInfo, _ := authorization.InfoFromContext(r.Context())
+	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.org.list-domains")
+
+	orgGUID := routing.URLParam(r, "guid")
+
+	if _, err := h.orgRepo.GetOrg(r.Context(), authInfo, orgGUID); err != nil {
+		return nil, apierrors.LogAndReturn(logger, apierrors.ForbiddenAsNotFound(err), "Unable to get organization")
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "Unable to parse request query parameters")
+	}
+
+	domainListFilter := new(payloads.DomainList)
+	err := payloads.Decode(domainListFilter, r.Form)
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "Unable to decode request query parameters")
+	}
+
+	domainList, err := h.domainRepo.ListDomains(r.Context(), authInfo, domainListFilter.ToMessage())
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "Failed to fetch domain(s) from Kubernetes")
+	}
+
+	for idx, _ := range domainList {
+		domainList[idx].OrgGUID = orgGUID
+	}
+	// TODO: This is wrong and I need to figure out what is the actual default domain
+	defaultDomain := domainList[0]
+
+	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForDomain(defaultDomain, h.apiBaseURL)), nil
 }
 
 func (h *Org) UnauthenticatedRoutes() []routing.Route {
@@ -189,6 +228,7 @@ func (h *Org) AuthenticatedRoutes() []routing.Route {
 		{Method: "DELETE", Pattern: OrgPath, Handler: h.delete},
 		{Method: "PATCH", Pattern: OrgPath, Handler: h.update},
 		{Method: "GET", Pattern: OrgDomainsPath, Handler: h.listDomains},
+		{Method: "GET", Pattern: OrgDefaultDomainsPath, Handler: h.getDefaultDomain},
 	}
 }
 

@@ -153,6 +153,12 @@ type PatchAppMetadataMessage struct {
 	SpaceGUID string
 }
 
+type PatchAppLifecycleMessage struct {
+	AppGUID   string
+	SpaceGUID string
+	Lifecycle Lifecycle
+}
+
 type SetCurrentDropletMessage struct {
 	AppGUID     string
 	DropletGUID string
@@ -356,11 +362,20 @@ func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage)
 
 	var filtered = appList
 
+	// TODO: Filtering logic can be way more simplified than this
+
 	if len(message.SpaceGuids) > 0 {
 		for index := len(filtered) - 1; index >= 0; index-- {
+			filter := true
 			for _, spaceGUID := range message.SpaceGuids {
-				if !appBelongsToSpace(filtered[index], spaceGUID) {
-					filtered = append(filtered[:index], filtered[index+1:]...)
+				if appBelongsToSpace(filtered[index], spaceGUID) {
+					filter = false
+				}
+			}
+			if filter {
+				filtered = append(filtered[:index], filtered[index+1:]...)
+				if len(filtered) == 0 {
+					return filtered
 				}
 			}
 		}
@@ -368,9 +383,16 @@ func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage)
 
 	if len(message.Guids) > 0 {
 		for index := len(filtered) - 1; index >= 0; index-- {
+			filter := true
 			for _, guid := range message.Guids {
-				if !appMatchesGUID(filtered[index], guid) {
-					filtered = append(filtered[:index], filtered[index+1:]...)
+				if appMatchesGUID(filtered[index], guid) {
+					filter = false
+				}
+			}
+			if filter {
+				filtered = append(filtered[:index], filtered[index+1:]...)
+				if len(filtered) == 0 {
+					return filtered
 				}
 			}
 		}
@@ -378,9 +400,16 @@ func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage)
 
 	if len(message.Names) > 0 {
 		for index := len(filtered) - 1; index >= 0; index-- {
+			filter := true
 			for _, name := range message.Names {
-				if !appMatchesName(filtered[index], name) {
-					filtered = append(filtered[:index], filtered[index+1:]...)
+				if appMatchesName(filtered[index], name) {
+					filter = false
+				}
+			}
+			if filter {
+				filtered = append(filtered[:index], filtered[index+1:]...)
+				if len(filtered) == 0 {
+					return filtered
 				}
 			}
 		}
@@ -388,9 +417,10 @@ func applyAppListFilter(appList []korifiv1alpha1.CFApp, message ListAppsMessage)
 
 	if len(message.Labels) > 0 {
 		for index := len(filtered) - 1; index >= 0; index-- {
-			for _, label := range message.Labels {
-				if !appMatchesLabel(filtered[index].Labels, label) {
-					filtered = append(filtered[:index], filtered[index+1:]...)
+			if !appMatchesAllLabels(filtered[index].Labels, message.Labels) {
+				filtered = append(filtered[:index], filtered[index+1:]...)
+				if len(filtered) == 0 {
+					return filtered
 				}
 			}
 		}
@@ -405,6 +435,15 @@ func appBelongsToSpace(app korifiv1alpha1.CFApp, spaceGUID string) bool {
 
 func appMatchesName(app korifiv1alpha1.CFApp, name string) bool {
 	return app.Spec.DisplayName == name
+}
+
+func appMatchesAllLabels(labels map[string]string, queries []string) bool {
+	for _, query := range queries {
+		if !labelsFilter(labels, query) {
+			return false
+		}
+	}
+	return true
 }
 
 func appMatchesLabel(labels map[string]string, query string) bool {
@@ -507,6 +546,42 @@ func (f *AppRepo) PatchAppMetadata(ctx context.Context, authInfo authorization.I
 
 	err = k8s.PatchResource(ctx, userClient, app, func() {
 		message.Apply(app)
+	})
+	if err != nil {
+		return AppRecord{}, apierrors.FromK8sError(err, AppResourceType)
+	}
+
+	return cfAppToAppRecord(*app), nil
+}
+
+func (f *AppRepo) PatchAppLifecycle(ctx context.Context, authInfo authorization.Info, message PatchAppLifecycleMessage) (AppRecord, error) {
+	userClient, err := f.userClientFactory.BuildClient(authInfo)
+	if err != nil {
+		return AppRecord{}, fmt.Errorf("failed to build user client: %w", err)
+	}
+
+	namespace, err := f.namespaceRetriever.NameFor(ctx, message.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return AppRecord{}, err
+	}
+
+	app := new(korifiv1alpha1.CFApp)
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: message.AppGUID}, app)
+	if err != nil {
+		return AppRecord{}, fmt.Errorf("failed to get app: %w", apierrors.FromK8sError(err, AppResourceType))
+	}
+
+	err = k8s.PatchResource(ctx, userClient, app, func() {
+
+		app.Spec.Lifecycle.Type = korifiv1alpha1.LifecycleType(message.Lifecycle.Type)
+
+		if app.Spec.Lifecycle.Type == "buildpack" {
+			app.Spec.Lifecycle.Data.Stack = message.Lifecycle.Data.Stack
+			app.Spec.Lifecycle.Data.Buildpacks = message.Lifecycle.Data.Buildpacks
+		} else {
+			app.Spec.Lifecycle.Data = korifiv1alpha1.LifecycleData{}
+		}
+		//message.Apply(app)
 	})
 	if err != nil {
 		return AppRecord{}, apierrors.FromK8sError(err, AppResourceType)

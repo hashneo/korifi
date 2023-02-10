@@ -8,7 +8,7 @@ import (
 
 type ServiceBindingCreate struct {
 	Relationships *ServiceBindingRelationships `json:"relationships" validate:"required"`
-	Type          string                       `json:"type" validate:"oneof=app"`
+	Type          string                       `json:"type" validate:"oneof=app key"`
 	Name          *string                      `json:"name"`
 }
 
@@ -20,6 +20,7 @@ type ServiceBindingRelationships struct {
 func (p ServiceBindingCreate) ToMessage(spaceGUID string) repositories.CreateServiceBindingMessage {
 	return repositories.CreateServiceBindingMessage{
 		Name:                p.Name,
+		Type:                p.Type,
 		ServiceInstanceGUID: p.Relationships.ServiceInstance.Data.GUID,
 		AppGUID:             p.Relationships.App.Data.GUID,
 		SpaceGUID:           spaceGUID,
@@ -27,16 +28,19 @@ func (p ServiceBindingCreate) ToMessage(spaceGUID string) repositories.CreateSer
 }
 
 type ServiceBindingList struct {
+	Type                 string
 	AppGUIDs             string
 	ServiceInstanceGUIDs string
 	Include              string
-	LabelSector          string
+	LabelSelector        string
 }
 
 func (l *ServiceBindingList) ToMessage() repositories.ListServiceBindingsMessage {
 	return repositories.ListServiceBindingsMessage{
+		Type:                 l.Type,
 		ServiceInstanceGUIDs: ParseArrayParam(l.ServiceInstanceGUIDs),
 		AppGUIDs:             ParseArrayParam(l.AppGUIDs),
+		LabelSelectors:       ParseArrayParam(l.LabelSelector),
 	}
 }
 
@@ -45,9 +49,14 @@ func (l *ServiceBindingList) SupportedKeys() []string {
 }
 
 func (l *ServiceBindingList) DecodeFromURLValues(values url.Values) error {
+	l.Type = values.Get("type")
+	if (l.Type != "key") && (l.Type != "app") {
+		l.Type = "app"
+	}
+
 	l.AppGUIDs = values.Get("app_guids")
 	l.ServiceInstanceGUIDs = values.Get("service_instance_guids")
 	l.Include = values.Get("include")
-	l.LabelSector = values.Get("label_selector")
+	l.LabelSelector = values.Get("label_selector")
 	return nil
 }

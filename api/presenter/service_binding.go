@@ -76,19 +76,28 @@ func ForServiceBinding(record repositories.ServiceBindingRecord, baseURL url.URL
 	}
 }
 
-func ForServiceBindingList(serviceBindingRecord []repositories.ServiceBindingRecord, appRecords []repositories.AppRecord, baseURL, requestURL url.URL) ListResponse {
+func ForServiceBindingList(serviceBindingRecord []repositories.ServiceBindingRecord, appRecords []repositories.AppRecord, serviceInstanceRecords []repositories.ServiceInstanceRecord, baseURL, requestURL url.URL) ListResponse {
 	serviceBindingResponses := make([]interface{}, 0, len(serviceBindingRecord))
 	for _, serviceBinding := range serviceBindingRecord {
 		serviceBindingResponses = append(serviceBindingResponses, ForServiceBinding(serviceBinding, baseURL))
 	}
 
+	includedData := IncludedData{}
+
 	ret := ForList(serviceBindingResponses, baseURL, requestURL)
 	if len(appRecords) > 0 {
-		appData := IncludedData{}
 		for _, appRecord := range appRecords {
-			appData.Apps = append(appData.Apps, ForApp(appRecord, baseURL))
+			includedData.Apps = append(includedData.Apps, ForApp(appRecord, baseURL))
 		}
-		ret.Included = &appData
 	}
+
+	if len(serviceInstanceRecords) > 0 {
+		for _, serviceInstanceRecord := range serviceInstanceRecords {
+			includedData.ServiceInstances = append(includedData.ServiceInstances, ForServiceInstance(serviceInstanceRecord, baseURL))
+		}
+	}
+
+	ret.Included = &includedData
+
 	return ret
 }

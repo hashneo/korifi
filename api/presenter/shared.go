@@ -51,7 +51,8 @@ type PaginationData struct {
 }
 
 type IncludedData struct {
-	Apps []interface{} `json:"apps"`
+	Apps             []interface{} `json:"apps,omitempty"`
+	ServiceInstances []interface{} `json:"service_instances,omitempty"`
 }
 
 type PageRef struct {

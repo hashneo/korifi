@@ -17,13 +17,10 @@ limitations under the License.
 package networking
 
 import (
-	"context"
-	"regexp"
-
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
 	"code.cloudfoundry.org/korifi/tools/k8s"
-
+	"context"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -65,9 +62,16 @@ func (r *CFDomainReconciler) ReconcileResource(ctx context.Context, cfDomain *ko
 	if cfDomain.Labels == nil {
 		cfDomain.Labels = map[string]string{}
 	}
-	//TODO: Find a way better way to do this!
-	cfDomain.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfDomain.Namespace, "$1")
 
+	if _, ok := cfDomain.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey]; !ok {
+		//TODO: Find a way better way to do this!
+		//cfDomain.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfDomain.Namespace, "$1")
+	}
+	/*
+		if _, ok := cfDomain.Labels[korifiv1alpha1.CFDomainGUIDLabelKey]; !ok {
+			cfDomain.Labels[korifiv1alpha1.CFDomainGUIDLabelKey] = uuid.New().String()
+		}
+	*/
 	err := k8s.AddFinalizer(ctx, log, r.client, cfDomain, CFDomainFinalizerName)
 	if err != nil {
 		log.Error(err, "Error adding finalizer")

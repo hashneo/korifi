@@ -36,8 +36,13 @@ func (p AppCreate) ToAppCreateMessage() repositories.CreateAppMessage {
 		},
 	}
 	if p.Lifecycle != nil {
-		lifecycleBlock.Data.Stack = p.Lifecycle.Data.Stack
-		lifecycleBlock.Data.Buildpacks = p.Lifecycle.Data.Buildpacks
+		if p.Lifecycle.Type == "buildpack" {
+			lifecycleBlock.Data.Stack = p.Lifecycle.Data.Stack
+			lifecycleBlock.Data.Buildpacks = p.Lifecycle.Data.Buildpacks
+		} else {
+			lifecycleBlock.Type = p.Lifecycle.Type
+			lifecycleBlock.Data = repositories.LifecycleData{}
+		}
 	}
 
 	return repositories.CreateAppMessage{
@@ -118,10 +123,28 @@ func (a *AppPatchEnvVars) ToMessage(appGUID, spaceGUID string) repositories.Patc
 }
 
 type AppPatch struct {
-	Metadata MetadataPatch `json:"metadata"`
+	Lifecycle *Lifecycle     `json:"lifecycle"`
+	Metadata  *MetadataPatch `json:"metadata"`
 }
 
-func (a *AppPatch) ToMessage(appGUID, spaceGUID string) repositories.PatchAppMetadataMessage {
+func (a *AppPatch) ToPatchAppLifecycleMessage(appGUID, spaceGUID string) repositories.PatchAppLifecycleMessage {
+	m := repositories.PatchAppLifecycleMessage{
+		AppGUID:   appGUID,
+		SpaceGUID: spaceGUID,
+		Lifecycle: repositories.Lifecycle{
+			Type: a.Lifecycle.Type,
+		},
+	}
+
+	if a.Lifecycle.Data != nil {
+		m.Lifecycle.Data = repositories.LifecycleData{
+			Buildpacks: a.Lifecycle.Data.Buildpacks,
+			Stack:      a.Lifecycle.Data.Stack,
+		}
+	}
+	return m
+}
+func (a *AppPatch) ToPatchAppMetadataMessage(appGUID, spaceGUID string) repositories.PatchAppMetadataMessage {
 	return repositories.PatchAppMetadataMessage{
 		AppGUID:   appGUID,
 		SpaceGUID: spaceGUID,

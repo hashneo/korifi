@@ -36,7 +36,7 @@ type DomainRelationships struct {
 }
 
 type Organization struct {
-	Data *string `json:"data"`
+	Data RelationshipData `json:"data,omitempty"`
 }
 
 type SharedOrganizations struct {
@@ -51,7 +51,7 @@ func ForDomain(responseDomain repositories.DomainRecord, baseURL url.URL) Domain
 		responseDomain.Annotations = map[string]string{}
 	}
 
-	return DomainResponse{
+	dr := DomainResponse{
 		Name:               responseDomain.Name,
 		GUID:               responseDomain.GUID,
 		Internal:           false,
@@ -66,7 +66,7 @@ func ForDomain(responseDomain repositories.DomainRecord, baseURL url.URL) Domain
 		},
 		Relationships: DomainRelationships{
 			Organization: Organization{
-				Data: nil,
+				Data: RelationshipData{GUID: responseDomain.OrgGUID},
 			},
 			SharedOrganizations: SharedOrganizations{
 				Data: []string{},
@@ -82,6 +82,12 @@ func ForDomain(responseDomain repositories.DomainRecord, baseURL url.URL) Domain
 			RouterGroup: nil,
 		},
 	}
+	/*
+		if responseDomain.OrgGUID != "" {
+			dr.Relationships.Organization.Data = RelationshipData{GUID: responseDomain.OrgGUID}
+		}
+	*/
+	return dr
 }
 
 func ForDomainList(domainListRecords []repositories.DomainRecord, baseURL, requestURL url.URL) ListResponse {

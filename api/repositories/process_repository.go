@@ -245,8 +245,13 @@ func (r *ProcessRepo) GetProcessByAppTypeAndSpace(ctx context.Context, authInfo 
 		return ProcessRecord{}, fmt.Errorf("get-process-by-app-type-and-space: failed to build user k8s client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, spaceGUID, SpaceResourceType)
+	if err != nil {
+		return ProcessRecord{}, err
+	}
+
 	var processList korifiv1alpha1.CFProcessList
-	err = userClient.List(ctx, &processList, client.InNamespace(spaceGUID))
+	err = userClient.List(ctx, &processList, client.InNamespace(namespace))
 	if err != nil {
 		return ProcessRecord{}, apierrors.FromK8sError(err, ProcessResourceType)
 	}
@@ -363,7 +368,7 @@ func cfProcessToProcessRecord(cfProcess korifiv1alpha1.CFProcess) ProcessRecord 
 
 	return ProcessRecord{
 		GUID:             cfProcess.Name,
-		SpaceGUID:        cfProcess.Namespace,
+		SpaceGUID:        cfProcess.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
 		AppGUID:          cfProcess.Spec.AppRef.Name,
 		Type:             cfProcess.Spec.ProcessType,
 		Command:          cmd,

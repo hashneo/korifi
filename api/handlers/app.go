@@ -35,6 +35,8 @@ const (
 	AppRestartPath                    = "/v3/apps/{guid}/actions/restart"
 	AppEnvVarsPath                    = "/v3/apps/{guid}/environment_variables"
 	AppEnvPath                        = "/v3/apps/{guid}/env"
+	AppSSHEnabledPath                 = "/v3/apps/{guid}/ssh_enabled"
+	AppFeaturePath                    = "/v3/apps/{guid}/features/{name}"
 	invalidDropletMsg                 = "Unable to assign current droplet. Ensure the droplet exists and belongs to this app."
 
 	AppStartedState = "STARTED"
@@ -53,6 +55,7 @@ type CFAppRepository interface {
 	DeleteApp(context.Context, authorization.Info, repositories.DeleteAppMessage) error
 	GetAppEnv(context.Context, authorization.Info, string) (repositories.AppEnvRecord, error)
 	PatchAppMetadata(context.Context, authorization.Info, repositories.PatchAppMetadataMessage) (repositories.AppRecord, error)
+	PatchAppLifecycle(context.Context, authorization.Info, repositories.PatchAppLifecycleMessage) (repositories.AppRecord, error)
 }
 
 type App struct {
@@ -549,6 +552,18 @@ func (h *App) getEnvironment(r *http.Request) (*routing.Response, error) {
 	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForAppEnv(appEnvRecord)), nil
 }
 
+type SshEnabled struct {
+	Enabled bool   `json:"enabled"`
+	Reason  string `json:"reason"`
+}
+
+func (h *App) getSshEnabled(r *http.Request) (*routing.Response, error) {
+
+	sshEnabled := SshEnabled{Enabled: false, Reason: "Disabled"}
+
+	return routing.NewResponse(http.StatusOK).WithBody(sshEnabled), nil
+}
+
 func (h *App) getProcess(r *http.Request) (*routing.Response, error) {
 	authInfo, _ := authorization.InfoFromContext(r.Context())
 	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.app.get-process")
@@ -584,10 +599,53 @@ func (h *App) update(r *http.Request) (*routing.Response, error) {
 		return nil, apierrors.LogAndReturn(logger, err, "failed to decode payload")
 	}
 
-	app, err = h.appRepo.PatchAppMetadata(r.Context(), authInfo, payload.ToMessage(appGUID, app.SpaceGUID))
-	if err != nil {
-		return nil, apierrors.LogAndReturn(logger, err, "Failed to patch app metadata", "AppGUID", appGUID)
+	if payload.Metadata != nil {
+		app, err = h.appRepo.PatchAppMetadata(r.Context(), authInfo, payload.ToPatchAppMetadataMessage(appGUID, app.SpaceGUID))
+		if err != nil {
+			return nil, apierrors.LogAndReturn(logger, err, "Failed to patch app metadata", "AppGUID", appGUID)
+		}
 	}
+
+	if payload.Lifecycle != nil {
+		app, err = h.appRepo.PatchAppLifecycle(r.Context(), authInfo, payload.ToPatchAppLifecycleMessage(appGUID, app.SpaceGUID))
+		if err != nil {
+			return nil, apierrors.LogAndReturn(logger, err, "Failed to patch app metadata", "AppGUID", appGUID)
+		}
+	}
+
+	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForApp(app, h.serverURL)), nil
+}
+
+// TODO : Implement Patching of Features
+func (h *App) updateAppFeature(r *http.Request) (*routing.Response, error) {
+	authInfo, _ := authorization.InfoFromContext(r.Context())
+	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.app.update")
+	appGUID := routing.URLParam(r, "guid")
+
+	app, err := h.appRepo.GetApp(r.Context(), authInfo, appGUID)
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, apierrors.ForbiddenAsNotFound(err), "Failed to fetch app from Kubernetes", "AppGUID", appGUID)
+	}
+	/*
+		var payload payloads.AppPatch
+		if err = h.decoderValidator.DecodeAndValidateJSONPayload(r, &payload); err != nil {
+			return nil, apierrors.LogAndReturn(logger, err, "failed to decode payload")
+		}
+
+		if payload.Metadata != nil {
+			app, err = h.appRepo.PatchAppMetadata(r.Context(), authInfo, payload.ToPatchAppMetadataMessage(appGUID, app.SpaceGUID))
+			if err != nil {
+				return nil, apierrors.LogAndReturn(logger, err, "Failed to patch app metadata", "AppGUID", appGUID)
+			}
+		}
+
+		if payload.Lifecycle != nil {
+			app, err = h.appRepo.PatchAppLifecycle(r.Context(), authInfo, payload.ToPatchAppLifecycleMessage(appGUID, app.SpaceGUID))
+			if err != nil {
+				return nil, apierrors.LogAndReturn(logger, err, "Failed to patch app metadata", "AppGUID", appGUID)
+			}
+		}
+	*/
 	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForApp(app, h.serverURL)), nil
 }
 
@@ -612,6 +670,9 @@ func (h *App) AuthenticatedRoutes() []routing.Route {
 		{Method: "DELETE", Pattern: AppPath, Handler: h.delete},
 		{Method: "PATCH", Pattern: AppEnvVarsPath, Handler: h.updateEnvVars},
 		{Method: "GET", Pattern: AppEnvPath, Handler: h.getEnvironment},
+		{Method: "GET", Pattern: AppSSHEnabledPath, Handler: h.getSshEnabled},
 		{Method: "PATCH", Pattern: AppPath, Handler: h.update},
+
+		{Method: "PATCH", Pattern: AppFeaturePath, Handler: h.updateAppFeature},
 	}
 }

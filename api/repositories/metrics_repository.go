@@ -17,12 +17,17 @@ const (
 )
 
 type MetricsRepo struct {
-	userClientFactory authorization.UserK8sClientFactory
+	userClientFactory  authorization.UserK8sClientFactory
+	namespaceRetriever NamespaceRetriever
 }
 
-func NewMetricsRepo(userClientFactory authorization.UserK8sClientFactory) *MetricsRepo {
+func NewMetricsRepo(
+	userClientFactory authorization.UserK8sClientFactory,
+	namespaceRetriever NamespaceRetriever,
+) *MetricsRepo {
 	return &MetricsRepo{
-		userClientFactory: userClientFactory,
+		userClientFactory:  userClientFactory,
+		namespaceRetriever: namespaceRetriever,
 	}
 }
 
@@ -31,10 +36,15 @@ type PodMetrics struct {
 	Metrics metricsv1beta1.PodMetrics
 }
 
-func (r *MetricsRepo) GetMetrics(ctx context.Context, authInfo authorization.Info, namespace string, podSelector client.MatchingLabels) ([]PodMetrics, error) {
+func (r *MetricsRepo) GetMetrics(ctx context.Context, authInfo authorization.Info, SpaceGUID string, podSelector client.MatchingLabels) ([]PodMetrics, error) {
 	userClient, err := r.userClientFactory.BuildClient(authInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build user client: %w", err)
+	}
+
+	namespace, err := r.namespaceRetriever.NameFor(ctx, SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return nil, err
 	}
 
 	podList := &corev1.PodList{}

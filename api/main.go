@@ -201,7 +201,10 @@ func main() {
 		nsPermissions,
 		conditions.NewConditionAwaiter[*korifiv1alpha1.CFTask, korifiv1alpha1.CFTaskList](createTimeout),
 	)
-	metricsRepo := repositories.NewMetricsRepo(userClientFactory)
+	metricsRepo := repositories.NewMetricsRepo(
+		userClientFactory,
+		namespaceRetriever,
+	)
 
 	processStats := actions.NewProcessStats(processRepo, appRepo, metricsRepo)
 	manifest := actions.NewManifest(
@@ -250,6 +253,7 @@ func main() {
 			appRepo,
 			dropletRepo,
 			processRepo,
+			processStats,
 			routeRepo,
 			domainRepo,
 			spaceRepo,

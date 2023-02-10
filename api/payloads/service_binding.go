@@ -1,9 +1,8 @@
 package payloads
 
 import (
-	"net/url"
-
 	"code.cloudfoundry.org/korifi/api/repositories"
+	"net/url"
 )
 
 type ServiceBindingCreate struct {
@@ -33,6 +32,7 @@ type ServiceBindingList struct {
 	ServiceInstanceGUIDs string
 	Include              string
 	LabelSelector        string
+	Page                 string
 }
 
 func (l *ServiceBindingList) ToMessage() repositories.ListServiceBindingsMessage {
@@ -45,7 +45,7 @@ func (l *ServiceBindingList) ToMessage() repositories.ListServiceBindingsMessage
 }
 
 func (l *ServiceBindingList) SupportedKeys() []string {
-	return []string{"app_guids", "service_instance_guids", "include", "type", "label_selector"}
+	return []string{"app_guids", "service_instance_guids", "include", "type", "label_selector", "page"}
 }
 
 func (l *ServiceBindingList) DecodeFromURLValues(values url.Values) error {
@@ -58,5 +58,7 @@ func (l *ServiceBindingList) DecodeFromURLValues(values url.Values) error {
 	l.ServiceInstanceGUIDs = values.Get("service_instance_guids")
 	l.Include = values.Get("include")
 	l.LabelSelector = values.Get("label_selector")
+	l.Page = values.Get("page")
+
 	return nil
 }

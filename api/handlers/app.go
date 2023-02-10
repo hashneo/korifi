@@ -35,7 +35,8 @@ const (
 	AppEnvPath                        = "/v3/apps/{guid}/env"
 	AppSSHEnabledPath                 = "/v3/apps/{guid}/ssh_enabled"
 	AppFeaturePath                    = "/v3/apps/{guid}/features/{name}"
-	invalidDropletMsg                 = "Unable to assign current droplet. Ensure the droplet exists and belongs to this app."
+
+	invalidDropletMsg = "Unable to assign current droplet. Ensure the droplet exists and belongs to this app."
 
 	AppStartedState = "STARTED"
 	AppStoppedState = "STOPPED"
@@ -552,9 +553,7 @@ type SshEnabled struct {
 }
 
 func (h *App) getSshEnabled(r *http.Request) (*routing.Response, error) {
-
 	sshEnabled := SshEnabled{Enabled: false, Reason: "Disabled"}
-
 	return routing.NewResponse(http.StatusOK).WithBody(sshEnabled), nil
 }
 

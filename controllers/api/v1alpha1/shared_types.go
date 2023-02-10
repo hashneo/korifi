@@ -17,6 +17,7 @@ const (
 	CFTaskGUIDLabelKey      = "korifi.cloudfoundry.org/task-guid"
 	CFOrgGUIDLabelKey       = "korifi.cloudfoundry.org/org-guid"
 	CFSpaceGUIDLabelKey     = "korifi.cloudfoundry.org/space-guid"
+	CFUserGUIDLabelKey      = "korifi.cloudfoundry.org/user-guid"
 
 	CFBindingTypeLabelKey = "korifi.cloudfoundry.org/binding-type"
 

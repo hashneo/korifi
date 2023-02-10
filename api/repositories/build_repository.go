@@ -33,10 +33,17 @@ const (
 	stagingLogSourceType = "STG"
 )
 
+type BuildCreatedBy struct {
+	GUID  string
+	Name  string
+	Email string
+}
+
 type BuildRecord struct {
 	GUID            string
 	State           string
 	CreatedAt       string
+	CreatedBy       BuildCreatedBy
 	UpdatedAt       string
 	StagingErrorMsg string
 	StagingMemoryMB int
@@ -159,9 +166,14 @@ func (b *BuildRepo) cfBuildToBuildRecord(cfBuild korifiv1alpha1.CFBuild) BuildRe
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfBuild.ObjectMeta)
 
 	toReturn := BuildRecord{
-		GUID:            cfBuild.Name,
-		State:           BuildStateStaging,
-		CreatedAt:       cfBuild.CreationTimestamp.UTC().Format(TimestampFormat),
+		GUID:      cfBuild.Name,
+		State:     BuildStateStaging,
+		CreatedAt: cfBuild.CreationTimestamp.UTC().Format(TimestampFormat),
+		CreatedBy: BuildCreatedBy{
+			GUID:  cfBuild.Labels[korifiv1alpha1.CFUserGUIDLabelKey],
+			Name:  "",
+			Email: "",
+		},
 		UpdatedAt:       updatedAtTime,
 		StagingErrorMsg: "",
 		StagingMemoryMB: cfBuild.Spec.StagingMemoryMB,
@@ -214,6 +226,15 @@ func (b *BuildRepo) CreateBuild(ctx context.Context, authInfo authorization.Info
 	}
 
 	cfBuild := message.toCFBuild(namespace)
+
+	if cfBuild.Labels == nil {
+		cfBuild.Labels = map[string]string{}
+	}
+
+	if authInfo.Token != nil {
+		userGUID := (*authInfo.Token).UserId()
+		cfBuild.Labels[korifiv1alpha1.CFUserGUIDLabelKey] = userGUID
+	}
 
 	cfBuild.Namespace = namespace
 

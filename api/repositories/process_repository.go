@@ -179,10 +179,15 @@ func (r *ProcessRepo) ScaleProcess(ctx context.Context, authInfo authorization.I
 		return ProcessRecord{}, fmt.Errorf("get-process: failed to build user k8s client: %w", err)
 	}
 
+	namespace, err := r.namespaceRetriever.NameFor(ctx, scaleProcessMessage.SpaceGUID, SpaceResourceType)
+	if err != nil {
+		return ProcessRecord{}, err
+	}
+
 	cfProcess := &korifiv1alpha1.CFProcess{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scaleProcessMessage.GUID,
-			Namespace: scaleProcessMessage.SpaceGUID,
+			Namespace: namespace,
 		},
 	}
 	err = k8s.PatchResource(ctx, userClient, cfProcess, func() {

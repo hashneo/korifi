@@ -46,7 +46,9 @@ spec:
           apiVersion: korifi.cloudfoundry.org/v1alpha1
           kind: CFDomain
           metadata:
-            name: {{uuidv4}}
+            name: 00000000-0000-0000-0000-000000000000
+            labels: 
+              korifi.cloudfoundry.org/default-domain: "true"
           spec:
             name: {{ .Values.global.defaultAppDomainName }}
           EOF

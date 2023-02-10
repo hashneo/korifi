@@ -207,11 +207,14 @@ func (h *Org) getDefaultDomain(r *http.Request) (*routing.Response, error) {
 		return nil, apierrors.LogAndReturn(logger, err, "Failed to fetch domain(s) from Kubernetes")
 	}
 
+	defaultDomain := repositories.DomainRecord{}
 	for idx, _ := range domainList {
 		domainList[idx].OrgGUID = orgGUID
+
+		if domainList[idx].IsDefault {
+			defaultDomain = domainList[idx]
+		}
 	}
-	// TODO: This is wrong and I need to figure out what is the actual default domain
-	defaultDomain := domainList[0]
 
 	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForDomain(defaultDomain, h.apiBaseURL)), nil
 }

@@ -42,6 +42,7 @@ func NewDomainRepo(
 type DomainRecord struct {
 	Name        string
 	GUID        string
+	IsDefault   bool
 	OrgGUID     string
 	Labels      map[string]string
 	Annotations map[string]string
@@ -240,6 +241,7 @@ func cfDomainToDomainRecord(cfDomain *korifiv1alpha1.CFDomain) DomainRecord {
 	r := DomainRecord{
 		Name:        cfDomain.Spec.Name,
 		GUID:        cfDomain.Name,
+		IsDefault:   string(cfDomain.Labels[korifiv1alpha1.CFDefaultDomainLabelKey]) == "true",
 		OrgGUID:     cfDomain.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		Namespace:   cfDomain.Namespace,
 		CreatedAt:   cfDomain.CreationTimestamp.UTC().Format(TimestampFormat),

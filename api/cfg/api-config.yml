@@ -3,7 +3,7 @@ CFOnK8s: false
 uaaURL: uaa.steventaylor.net
 loginURL: login.steventaylor.net
 externalPort: 0
-internalPort: 9000
+internalPort: 9001
 idleTimeout: 900
 readTimeout: 900
 readHeaderTimeout: 10

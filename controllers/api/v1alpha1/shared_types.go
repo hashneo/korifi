@@ -19,6 +19,8 @@ const (
 	CFSpaceGUIDLabelKey     = "korifi.cloudfoundry.org/space-guid"
 	CFUserGUIDLabelKey      = "korifi.cloudfoundry.org/user-guid"
 
+	CFDefaultDomainLabelKey = "korifi.cloudfoundry.org/default-domain"
+
 	CFBindingTypeLabelKey = "korifi.cloudfoundry.org/binding-type"
 
 	StagingConditionType   = "Staging"

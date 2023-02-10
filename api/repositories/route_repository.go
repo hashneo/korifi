@@ -19,7 +19,7 @@ import (
 
 const (
 	RouteResourceType = "Route"
-	RoutePrefix       = "cf-route-"
+	//RoutePrefix       = "cf-route-"
 )
 
 type RouteRepo struct {
@@ -129,7 +129,7 @@ func (m CreateRouteMessage) toCFRoute(namespace string) korifiv1alpha1.CFRoute {
 			APIVersion: APIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        RoutePrefix + uuid.NewString(),
+			Name:        uuid.NewString(),
 			Namespace:   namespace,
 			Labels:      m.Labels,
 			Annotations: m.Annotations,

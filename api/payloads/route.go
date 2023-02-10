@@ -37,6 +37,7 @@ type RouteList struct {
 	DomainGUIDs string
 	Hosts       string
 	Paths       string
+	Page        string
 }
 
 func (p *RouteList) ToMessage() repositories.ListRoutesMessage {
@@ -50,7 +51,7 @@ func (p *RouteList) ToMessage() repositories.ListRoutesMessage {
 }
 
 func (p *RouteList) SupportedKeys() []string {
-	return []string{"app_guids", "space_guids", "domain_guids", "hosts", "paths"}
+	return []string{"app_guids", "space_guids", "domain_guids", "hosts", "paths", "page"}
 }
 
 func (p *RouteList) DecodeFromURLValues(values url.Values) error {
@@ -59,6 +60,7 @@ func (p *RouteList) DecodeFromURLValues(values url.Values) error {
 	p.DomainGUIDs = values.Get("domain_guids")
 	p.Hosts = values.Get("hosts")
 	p.Paths = values.Get("paths")
+	p.Page = values.Get("page")
 	return nil
 }
 

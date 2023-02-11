@@ -60,7 +60,8 @@ func (a *Applier) applyApp(
 ) (AppState, error) {
 	if appState.App.GUID == "" {
 		appRecord, err := a.appRepo.CreateApp(ctx, authInfo, appInfo.ToAppCreateMessage(spaceGUID))
-		return AppState{App: appRecord}, err
+		appState.App = appRecord
+		return appState, err
 	} else {
 		_, err := a.appRepo.PatchApp(ctx, authInfo, appInfo.ToAppPatchMessage(appState.App.GUID, spaceGUID))
 		return appState, err

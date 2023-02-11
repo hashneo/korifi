@@ -21,6 +21,9 @@ data:
     containerRegistrySecretName: {{ .Values.global.containerRegistrySecret | quote }}
     {{- end }}
     taskTTL: {{ .Values.controllers.taskTTL }}
+    cfRouteDefaults:
+      routeTimeout:
+        response: {{ .Values.controllers.routeTimeout.response }}
     workloads_tls_secret_name: {{ .Values.controllers.workloadsTLSSecret }}
     workloads_tls_secret_namespace: {{ .Release.Namespace }}
     namespaceLabels:

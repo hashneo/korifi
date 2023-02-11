@@ -293,6 +293,9 @@ func (r *CFRouteReconciler) createOrPatchRouteProxy(ctx context.Context, log log
 					},
 					Services:         services,
 					EnableWebsockets: true,
+					TimeoutPolicy: &contourv1.TimeoutPolicy{
+						Response: r.controllerConfig.RouteDefaults.RouteTimeouts.Response,
+					},
 				},
 			}
 		}

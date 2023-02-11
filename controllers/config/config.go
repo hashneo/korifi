@@ -39,6 +39,17 @@ type ControllerConfig struct {
 	BuilderServiceAccount     string `yaml:"builderServiceAccount"`
 	ContainerRepositoryPrefix string `yaml:"containerRepositoryPrefix"`
 	ContainerRegistryType     string `yaml:"containerRegistryType"`
+
+	// Default CFRoute Controller defaults
+	RouteDefaults CFRouteDefaults `yaml:"cfRouteDefaults"`
+}
+
+type RouteTimeoutDefaults struct {
+	Response string `yaml:"response"`
+}
+
+type CFRouteDefaults struct {
+	RouteTimeouts RouteTimeoutDefaults `yaml:"routeTimeout"`
 }
 
 type CFProcessDefaults struct {
@@ -61,6 +72,10 @@ func LoadFromPath(path string) (*ControllerConfig, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if config.RouteDefaults.RouteTimeouts.Response == "" {
+		config.RouteDefaults.RouteTimeouts.Response = "30s"
 	}
 
 	if config.CFProcessDefaults.Timeout == nil {

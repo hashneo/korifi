@@ -72,7 +72,8 @@ controllers:
     diskQuotaMB: 1024
   taskTTL: 30d
   workloadsTLSSecret: korifi-workloads-ingress-cert
-
+  routeTimeout:
+    response: 30s
   namespaceLabels: {}
 
 kpackImageBuilder:

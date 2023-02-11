@@ -10,3 +10,6 @@ workloads_tls_secret_name: korifi-workloads-ingress-cert
 workloads_tls_secret_namespace: korifi-system
 includeContourRouter: false
 apiServerUrl: api.steventaylor.net
+cfRouteDefaults:
+  routeTimeout:
+    response: 60s

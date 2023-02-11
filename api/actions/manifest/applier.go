@@ -13,10 +13,12 @@ import (
 )
 
 type Applier struct {
-	appRepo     shared.CFAppRepository
-	domainRepo  shared.CFDomainRepository
-	processRepo shared.CFProcessRepository
-	routeRepo   shared.CFRouteRepository
+	appRepo             shared.CFAppRepository
+	domainRepo          shared.CFDomainRepository
+	processRepo         shared.CFProcessRepository
+	routeRepo           shared.CFRouteRepository
+	serviceInstanceRepo shared.CFServiceInstanceRepository
+	serviceBindingRepo  shared.CFServiceBindingRepository
 }
 
 func NewApplier(
@@ -24,12 +26,16 @@ func NewApplier(
 	domainRepo shared.CFDomainRepository,
 	processRepo shared.CFProcessRepository,
 	routeRepo shared.CFRouteRepository,
+	serviceInstanceRepo shared.CFServiceInstanceRepository,
+	serviceBindingRepo shared.CFServiceBindingRepository,
 ) *Applier {
 	return &Applier{
-		appRepo:     appRepo,
-		domainRepo:  domainRepo,
-		processRepo: processRepo,
-		routeRepo:   routeRepo,
+		appRepo:             appRepo,
+		domainRepo:          domainRepo,
+		processRepo:         processRepo,
+		routeRepo:           routeRepo,
+		serviceInstanceRepo: serviceInstanceRepo,
+		serviceBindingRepo:  serviceBindingRepo,
 	}
 }
 
@@ -45,6 +51,10 @@ func (a *Applier) Apply(ctx context.Context, authInfo authorization.Info, spaceG
 	}
 
 	if err := a.applyProcesses(ctx, authInfo, appInfo, appState); err != nil {
+		return err
+	}
+
+	if err := a.applyServiceBindings(ctx, authInfo, appInfo, appState); err != nil {
 		return err
 	}
 
@@ -86,6 +96,55 @@ func (a *Applier) applyProcesses(
 			return err
 		}
 
+	}
+
+	return nil
+}
+
+func (a *Applier) applyServiceBindings(ctx context.Context, authInfo authorization.Info, appInfo payloads.ManifestApplication, appState AppState) error {
+
+	//if ( appInfo.Services )
+
+	for _, service := range appInfo.Services {
+		err := a.createOrUpdateServiceBinding(ctx, authInfo, service, appState)
+		if err != nil {
+			return fmt.Errorf("createOrUpdateServiceBinding: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *Applier) createOrUpdateServiceBinding(ctx context.Context, authInfo authorization.Info, service string, appState AppState) error {
+
+	if _, serviceBindingExists := appState.Services[service]; serviceBindingExists {
+		return nil
+	}
+
+	app, err := a.appRepo.GetApp(ctx, authInfo, appState.App.GUID)
+	if err != nil {
+		return err
+	}
+
+	serviceInstanceList, err := a.serviceInstanceRepo.ListServiceInstances(ctx, authInfo, repositories.ListServiceInstanceMessage{
+		Names:      []string{service},
+		SpaceGuids: []string{app.SpaceGUID},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	serviceInstance := serviceInstanceList[0]
+
+	_, err = a.serviceBindingRepo.CreateServiceBinding(ctx, authInfo, repositories.CreateServiceBindingMessage{
+		Type:                "app",
+		ServiceInstanceGUID: serviceInstance.GUID,
+		AppGUID:             app.GUID,
+		SpaceGUID:           app.SpaceGUID,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

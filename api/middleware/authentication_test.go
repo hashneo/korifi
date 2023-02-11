@@ -35,7 +35,7 @@ var _ = Describe("Authentication Middleware", func() {
 		requestPath = "/v3/apps"
 
 		authInfoParser = new(fake.AuthInfoParser)
-		authInfoParser.ParseReturns(authorization.Info{Token: "the-token"}, nil)
+		authInfoParser.ParseReturns(authorization.Info{Token: authorization.NewToken("the-token")}, nil)
 
 		identityProvider = new(fake.IdentityProvider)
 		identityProvider.GetIdentityReturns(authorization.Identity{}, nil)
@@ -59,7 +59,7 @@ var _ = Describe("Authentication Middleware", func() {
 
 		Expect(identityProvider.GetIdentityCallCount()).To(Equal(1))
 		_, actualAuthInfo := identityProvider.GetIdentityArgsForCall(0)
-		Expect(actualAuthInfo).To(Equal(authorization.Info{Token: "the-token"}))
+		Expect(actualAuthInfo).To(Equal(authorization.Info{Token: authorization.NewToken("the-token")}))
 
 		Expect(rr).To(HaveHTTPStatus(http.StatusTeapot))
 	})
@@ -67,7 +67,7 @@ var _ = Describe("Authentication Middleware", func() {
 	It("parses the Authorization header into an authorization.Info and injects it in the request context", func() {
 		actualAuthInfo, ok := authorization.InfoFromContext(actualReq.Context())
 		Expect(ok).To(BeTrue())
-		Expect(actualAuthInfo).To(Equal(authorization.Info{Token: "the-token"}))
+		Expect(actualAuthInfo).To(Equal(authorization.Info{Token: authorization.NewToken("the-token")}))
 	})
 
 	When("parsing the Authorization header fails", func() {

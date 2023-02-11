@@ -78,6 +78,10 @@ func NewToken(data string) *Token {
 		token = new(BasicToken)
 		// Can't fail
 		err = (token).parse(data)
+
+		if err != nil {
+			return nil
+		}
 	}
 
 	return &token

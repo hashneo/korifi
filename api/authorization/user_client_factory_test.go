@@ -118,7 +118,7 @@ var _ = Describe("Unprivileged User Client Factory", func() {
 		Context("tokens", func() {
 			BeforeEach(func() {
 				token := authProvider.GenerateJWTToken(userName)
-				authInfo.Token = token
+				authInfo.Token = authorization.NewToken(token)
 			})
 
 			It("succeeds and forbids access to the user", func() {
@@ -211,7 +211,7 @@ var _ = Describe("Unprivileged User Client Factory", func() {
 
 		When("the token is not valid", func() {
 			BeforeEach(func() {
-				authInfo.Token = "xxx"
+				authInfo.Token = authorization.NewToken("xxx")
 			})
 
 			It("creates an unusable client", func() {

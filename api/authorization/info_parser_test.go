@@ -32,7 +32,7 @@ var _ = Describe("InfoParser", func() {
 
 		It("extracts the token from the header", func() {
 			Expect(err).NotTo(HaveOccurred())
-			Expect(info).To(Equal(authorization.Info{Token: "token"}))
+			Expect(info).To(Equal(authorization.Info{Token: authorization.NewToken("token")}))
 		})
 
 		When("the scheme is lowercase", func() {
@@ -42,7 +42,7 @@ var _ = Describe("InfoParser", func() {
 
 			It("extracts the token from the header", func() {
 				Expect(err).NotTo(HaveOccurred())
-				Expect(info).To(Equal(authorization.Info{Token: "token"}))
+				Expect(info).To(Equal(authorization.Info{Token: authorization.NewToken("token")}))
 			})
 		})
 	})

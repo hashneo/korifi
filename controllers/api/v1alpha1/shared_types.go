@@ -5,31 +5,34 @@ import (
 )
 
 const (
-	CFAppGUIDLabelKey       = "korifi.cloudfoundry.org/app-guid"
-	CFAppRevisionKey        = "korifi.cloudfoundry.org/app-rev"
+	CFLabelKeyPrefix     = "cloudfoundry.org/"
+	KorifiLabelKeyPrefix = "korifi." + CFLabelKeyPrefix
+
+	CFAppGUIDLabelKey       = KorifiLabelKeyPrefix + "app-guid"
+	CFAppRevisionKey        = KorifiLabelKeyPrefix + "app-rev"
 	CFAppRevisionKeyDefault = "0"
-	CFPackageGUIDLabelKey   = "korifi.cloudfoundry.org/package-guid"
-	CFBuildGUIDLabelKey     = "korifi.cloudfoundry.org/build-guid"
-	CFProcessGUIDLabelKey   = "korifi.cloudfoundry.org/process-guid"
-	CFProcessTypeLabelKey   = "korifi.cloudfoundry.org/process-type"
-	CFDomainGUIDLabelKey    = "korifi.cloudfoundry.org/domain-guid"
-	CFRouteGUIDLabelKey     = "korifi.cloudfoundry.org/route-guid"
-	CFTaskGUIDLabelKey      = "korifi.cloudfoundry.org/task-guid"
-	CFOrgGUIDLabelKey       = "korifi.cloudfoundry.org/org-guid"
-	CFSpaceGUIDLabelKey     = "korifi.cloudfoundry.org/space-guid"
-	CFUserGUIDLabelKey      = "korifi.cloudfoundry.org/user-guid"
+	CFPackageGUIDLabelKey   = KorifiLabelKeyPrefix + "package-guid"
+	CFBuildGUIDLabelKey     = KorifiLabelKeyPrefix + "build-guid"
+	CFProcessGUIDLabelKey   = KorifiLabelKeyPrefix + "process-guid"
+	CFProcessTypeLabelKey   = KorifiLabelKeyPrefix + "process-type"
+	CFDomainGUIDLabelKey    = KorifiLabelKeyPrefix + "domain-guid"
+	CFRouteGUIDLabelKey     = KorifiLabelKeyPrefix + "route-guid"
+	CFTaskGUIDLabelKey      = KorifiLabelKeyPrefix + "task-guid"
+	CFOrgGUIDLabelKey       = KorifiLabelKeyPrefix + "org-guid"
+	CFSpaceGUIDLabelKey     = KorifiLabelKeyPrefix + "space-guid"
+	CFUserGUIDLabelKey      = KorifiLabelKeyPrefix + "user-guid"
 
-	CFDefaultDomainLabelKey = "korifi.cloudfoundry.org/default-domain"
+	CFDefaultDomainLabelKey = KorifiLabelKeyPrefix + "default-domain"
 
-	CFBindingTypeLabelKey = "korifi.cloudfoundry.org/binding-type"
+	CFBindingTypeLabelKey = KorifiLabelKeyPrefix + "binding-type"
 
 	StagingConditionType   = "Staging"
 	ReadyConditionType     = "Ready"
 	SucceededConditionType = "Succeeded"
 
-	PropagateRoleBindingAnnotation    = "cloudfoundry.org/propagate-cf-role"
-	PropagateServiceAccountAnnotation = "cloudfoundry.org/propagate-service-account"
-	PropagatedFromLabel               = "cloudfoundry.org/propagated-from"
+	PropagateRoleBindingAnnotation    = CFLabelKeyPrefix + "propagate-cf-role"
+	PropagateServiceAccountAnnotation = CFLabelKeyPrefix + "propagate-service-account"
+	PropagatedFromLabel               = CFLabelKeyPrefix + "propagated-from"
 )
 
 type Lifecycle struct {

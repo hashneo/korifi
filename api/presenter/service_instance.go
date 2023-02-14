@@ -49,7 +49,15 @@ func ForServiceInstance(serviceInstanceRecord repositories.ServiceInstanceRecord
 		lastOperationType = "create"
 	}
 
-	return ServiceInstanceResponse{
+	if serviceInstanceRecord.Labels == nil {
+		serviceInstanceRecord.Labels = map[string]string{}
+	}
+
+	if serviceInstanceRecord.Annotations == nil {
+		serviceInstanceRecord.Annotations = map[string]string{}
+	}
+
+	r := ServiceInstanceResponse{
 		Name: serviceInstanceRecord.Name,
 		GUID: serviceInstanceRecord.GUID,
 		Type: serviceInstanceRecord.Type,
@@ -71,8 +79,8 @@ func ForServiceInstance(serviceInstanceRecord repositories.ServiceInstanceRecord
 			},
 		},
 		Metadata: Metadata{
-			Labels:      map[string]string{},
-			Annotations: map[string]string{},
+			Labels:      serviceInstanceRecord.Labels,
+			Annotations: serviceInstanceRecord.Annotations,
 		},
 		Links: ServiceInstanceLinks{
 			Self: Link{
@@ -92,6 +100,16 @@ func ForServiceInstance(serviceInstanceRecord repositories.ServiceInstanceRecord
 			},
 		},
 	}
+
+	if serviceInstanceRecord.ServicePlan != "" {
+		r.Relationships["service_plan"] = Relationship{
+			Data: &RelationshipData{
+				GUID: serviceInstanceRecord.ServicePlan,
+			},
+		}
+	}
+
+	return r
 }
 
 func ForServiceInstanceList(serviceInstanceRecord []repositories.ServiceInstanceRecord, baseURL, requestURL url.URL) ListResponse {

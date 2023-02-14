@@ -238,10 +238,13 @@ func returnDomainList(domainList []korifiv1alpha1.CFDomain) []DomainRecord {
 
 func cfDomainToDomainRecord(cfDomain *korifiv1alpha1.CFDomain) DomainRecord {
 	updatedAtTime, _ := getTimeLastUpdatedTimestamp(&cfDomain.ObjectMeta)
+
+	isDefaultDomain := cfDomain.Labels[korifiv1alpha1.CFDefaultDomainLabelKey]
+
 	r := DomainRecord{
 		Name:        cfDomain.Spec.Name,
 		GUID:        cfDomain.Name,
-		IsDefault:   string(cfDomain.Labels[korifiv1alpha1.CFDefaultDomainLabelKey]) == "true",
+		IsDefault:   isDefaultDomain == "true",
 		OrgGUID:     cfDomain.Labels[korifiv1alpha1.CFOrgGUIDLabelKey],
 		Namespace:   cfDomain.Namespace,
 		CreatedAt:   cfDomain.CreationTimestamp.UTC().Format(TimestampFormat),

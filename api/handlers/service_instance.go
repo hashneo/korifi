@@ -28,6 +28,7 @@ const (
 //counterfeiter:generate -o fake -fake-name CFServiceInstanceRepository . CFServiceInstanceRepository
 type CFServiceInstanceRepository interface {
 	CreateServiceInstance(context.Context, authorization.Info, repositories.CreateServiceInstanceMessage) (repositories.ServiceInstanceRecord, error)
+	UpdateServiceInstance(context.Context, authorization.Info, repositories.UpdateServiceInstanceMessage) (repositories.ServiceInstanceRecord, error)
 	ListServiceInstances(context.Context, authorization.Info, repositories.ListServiceInstanceMessage) ([]repositories.ServiceInstanceRecord, error)
 	GetServiceInstance(context.Context, authorization.Info, string) (repositories.ServiceInstanceRecord, error)
 	DeleteServiceInstance(context.Context, authorization.Info, repositories.DeleteServiceInstanceMessage) error
@@ -84,6 +85,40 @@ func (h *ServiceInstance) create(r *http.Request) (*routing.Response, error) {
 	}
 
 	return routing.NewResponse(http.StatusCreated).WithBody(presenter.ForServiceInstance(serviceInstanceRecord, h.serverURL)), nil
+}
+
+//nolint:dupl
+func (h *ServiceInstance) patch(r *http.Request) (*routing.Response, error) {
+	authInfo, _ := authorization.InfoFromContext(r.Context())
+	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.service-instance.create")
+
+	serviceInstanceGUID := routing.URLParam(r, "guid")
+
+	var payload payloads.ServiceInstanceUpdate
+	if err := h.decoderValidator.DecodeAndValidateJSONPayload(r, &payload); err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "failed to decode payload")
+	}
+
+	serviceInstanceRecord, err := h.serviceInstanceRepo.UpdateServiceInstance(r.Context(), authInfo, payload.ToServiceInstanceUpdateMessage(serviceInstanceGUID))
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "Failed to create service instance", "Service Instance Name", serviceInstanceRecord.Name)
+	}
+
+	return routing.NewResponse(http.StatusCreated).WithBody(presenter.ForServiceInstance(serviceInstanceRecord, h.serverURL)), nil
+}
+
+func (h *ServiceInstance) get(r *http.Request) (*routing.Response, error) {
+	authInfo, _ := authorization.InfoFromContext(r.Context())
+	logger := logr.FromContextOrDiscard(r.Context()).WithName("handlers.service-instance.list")
+
+	serviceInstanceGUID := routing.URLParam(r, "guid")
+
+	serviceInstance, err := h.serviceInstanceRepo.GetServiceInstance(r.Context(), authInfo, serviceInstanceGUID)
+	if err != nil {
+		return nil, apierrors.LogAndReturn(logger, err, "Failed to list service instance")
+	}
+
+	return routing.NewResponse(http.StatusOK).WithBody(presenter.ForServiceInstance(serviceInstance, h.serverURL)), nil
 }
 
 func (h *ServiceInstance) list(r *http.Request) (*routing.Response, error) {
@@ -170,6 +205,9 @@ func (h *ServiceInstance) AuthenticatedRoutes() []routing.Route {
 	return []routing.Route{
 		{Method: "POST", Pattern: ServiceInstancesPath, Handler: h.create},
 		{Method: "GET", Pattern: ServiceInstancesPath, Handler: h.list},
+
+		{Method: "PATCH", Pattern: ServiceInstancePath, Handler: h.patch},
+		{Method: "GET", Pattern: ServiceInstancePath, Handler: h.get},
 		{Method: "DELETE", Pattern: ServiceInstancePath, Handler: h.delete},
 	}
 }

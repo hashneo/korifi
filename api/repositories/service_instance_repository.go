@@ -1,12 +1,15 @@
 package repositories
 
 import (
-	"context"
-	"fmt"
-
 	"code.cloudfoundry.org/korifi/api/authorization"
 	apierrors "code.cloudfoundry.org/korifi/api/errors"
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
+	"code.cloudfoundry.org/korifi/tools/k8s"
+	"context"
+	"encoding/json"
+	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	"strings"
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -53,8 +56,18 @@ type CreateServiceInstanceMessage struct {
 	RouteServiceUrl string
 	Type            string
 	Tags            []string
+	Parameters      map[string]string
 	Labels          map[string]string
 	Annotations     map[string]string
+}
+
+type UpdateServiceInstanceMessage struct {
+	GUID            string
+	ServicePlanGUID *string
+	Tags            *[]string
+	Parameters      json.RawMessage
+	Labels          map[string]*string
+	Annotations     map[string]*string
 }
 
 type ListServiceInstanceMessage struct {
@@ -79,6 +92,47 @@ type ServiceInstanceRecord struct {
 	Type        string
 	CreatedAt   string
 	UpdatedAt   string
+	Labels      map[string]string
+	Annotations map[string]string
+}
+
+func (m *UpdateServiceInstanceMessage) Apply(obj *korifiv1alpha1.CFServiceInstance) {
+
+	if m.Parameters != nil {
+		obj.Spec.Parameters = &runtime.RawExtension{Raw: m.Parameters}
+	}
+
+	if m.Tags != nil {
+		obj.Spec.Tags = *m.Tags
+	}
+
+	if m.ServicePlanGUID != nil {
+		obj.Spec.ServicePlan = *m.ServicePlanGUID
+	}
+
+	if m.Labels != nil {
+		if obj.GetLabels() == nil {
+			obj.SetLabels(map[string]string{})
+		}
+		systemLabels := map[string]string{}
+		for k, v := range obj.Labels {
+			if strings.HasPrefix(k, korifiv1alpha1.KorifiLabelKeyPrefix) {
+				systemLabels[k] = v
+			}
+		}
+		obj.Labels = systemLabels
+		for k, v := range m.Labels {
+			obj.Labels[k] = *v
+		}
+
+	}
+
+	if m.Annotations != nil {
+		if obj.GetAnnotations() == nil {
+			obj.SetAnnotations(map[string]string{})
+		}
+		patchMap(obj.Annotations, m.Annotations)
+	}
 }
 
 func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInfo authorization.Info, message CreateServiceInstanceMessage) (ServiceInstanceRecord, error) {
@@ -131,6 +185,34 @@ func (r *ServiceInstanceRepo) CreateServiceInstance(ctx context.Context, authInf
 	}
 
 	return cfServiceInstanceToServiceInstanceRecord(cfServiceInstance), nil
+}
+
+func (r *ServiceInstanceRepo) UpdateServiceInstance(ctx context.Context, authInfo authorization.Info, message UpdateServiceInstanceMessage) (ServiceInstanceRecord, error) {
+	userClient, err := r.userClientFactory.BuildClient(authInfo)
+	if err != nil {
+		// untested
+		return ServiceInstanceRecord{}, fmt.Errorf("failed to build user client: %w", err)
+	}
+
+	namespace, err := r.namespaceRetriever.NamespaceFor(ctx, message.GUID, ServiceInstanceResourceType)
+	if err != nil {
+		return ServiceInstanceRecord{}, fmt.Errorf("failed to get namespace for service instance: %w", err)
+	}
+
+	cfServiceInstance := new(korifiv1alpha1.CFServiceInstance)
+	if err := userClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: message.GUID}, cfServiceInstance); err != nil {
+		return ServiceInstanceRecord{}, fmt.Errorf("failed to get service instance: %w", apierrors.FromK8sError(err, ServiceInstanceResourceType))
+	}
+
+	err = k8s.PatchResource(ctx, userClient, cfServiceInstance, func() {
+		message.Apply(cfServiceInstance)
+	})
+
+	if err != nil {
+		return ServiceInstanceRecord{}, apierrors.FromK8sError(err, ServiceInstanceResourceType)
+	}
+
+	return cfServiceInstanceToServiceInstanceRecord(*cfServiceInstance), nil
 }
 
 // nolint:dupl
@@ -240,6 +322,8 @@ func cfServiceInstanceToServiceInstanceRecord(cfServiceInstance korifiv1alpha1.C
 		Type:        string(cfServiceInstance.Spec.Type),
 		CreatedAt:   cfServiceInstance.CreationTimestamp.UTC().Format(TimestampFormat),
 		UpdatedAt:   updatedAtTime,
+		Labels:      cfServiceInstance.Labels,
+		Annotations: cfServiceInstance.Annotations,
 	}
 }
 

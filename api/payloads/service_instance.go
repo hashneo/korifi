@@ -1,20 +1,33 @@
 package payloads
 
 import (
-	"net/url"
-
 	"code.cloudfoundry.org/korifi/api/repositories"
+	"encoding/json"
+	"net/url"
 )
 
 type ServiceInstanceCreate struct {
 	Name            string                       `json:"name" validate:"required"`
 	Type            string                       `json:"type" validate:"required,oneof=user-provided managed"`
 	Tags            []string                     `json:"tags" validate:"serviceinstancetaglength"`
+	Parameters      map[string]string            `json:"parameters"`
 	Credentials     map[string]string            `json:"credentials"`
 	SysLogDrainUrl  string                       `json:"syslog_drain_url"`
 	RouteServiceUrl string                       `json:"route_service_url"`
 	Relationships   ServiceInstanceRelationships `json:"relationships" validate:"required"`
 	Metadata        Metadata                     `json:"metadata"`
+}
+
+type ServiceInstanceUpdate struct {
+	Name          *string                            `json:"name"`
+	Tags          *[]string                          `json:"tags"`
+	Parameters    json.RawMessage                    `json:"parameters"`
+	Relationships ServiceInstanceUpdateRelationships `json:"relationships" validate:"required"`
+	Metadata      *MetadataPatch                     `json:"metadata"`
+}
+
+type ServiceInstanceUpdateRelationships struct {
+	ServicePlan *ServicePlanRelationship `json:"service_plan" validate:"omitempty"`
 }
 
 type ServiceInstanceRelationships struct {
@@ -32,9 +45,28 @@ func (p ServiceInstanceCreate) ToServiceInstanceCreateMessage() repositories.Cre
 		RouteServiceUrl: p.RouteServiceUrl,
 		Type:            p.Type,
 		Tags:            p.Tags,
+		Parameters:      p.Parameters,
 		Labels:          p.Metadata.Labels,
 		Annotations:     p.Metadata.Annotations,
 	}
+}
+
+func (p ServiceInstanceUpdate) ToServiceInstanceUpdateMessage(guid string) repositories.UpdateServiceInstanceMessage {
+	m := repositories.UpdateServiceInstanceMessage{
+		GUID:       guid,
+		Tags:       p.Tags,
+		Parameters: p.Parameters,
+	}
+
+	if p.Relationships.ServicePlan != nil {
+		m.ServicePlanGUID = &p.Relationships.ServicePlan.Data.GUID
+	}
+
+	if p.Metadata != nil {
+		m.Labels = p.Metadata.Labels
+		m.Annotations = p.Metadata.Annotations
+	}
+	return m
 }
 
 type ServiceInstanceList struct {

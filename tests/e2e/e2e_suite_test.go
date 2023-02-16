@@ -2,7 +2,9 @@ package e2e_test
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -41,6 +43,7 @@ var (
 	rootNamespace       string
 	appFQDN             string
 	commonTestOrgGUID   string
+	commonTestOrgName   string
 	appBitsFile         string
 	clusterVersionMinor int
 	clusterVersionMajor int
@@ -49,6 +52,7 @@ var (
 const (
 	defaultAppBitsFile = "assets/procfile.zip"
 	loggingAppBitsFile = "assets/node.zip"
+	doraBitsFile       = "assets/dora.zip"
 )
 
 type resource struct {
@@ -65,8 +69,8 @@ type relationship struct {
 	Data resource `json:"data"`
 }
 
-type resourceList struct {
-	Resources []resource `json:"resources"`
+type resourceList[T any] struct {
+	Resources []T `json:"resources"`
 }
 
 type responseResource struct {
@@ -75,10 +79,6 @@ type responseResource struct {
 	CreatedAt string    `json:"created_at,omitempty"`
 	UpdatedAt string    `json:"updated_at,omitempty"`
 	Metadata  *metadata `json:"metadata,omitempty"`
-}
-
-type responseResourceList struct {
-	Resources []responseResource `json:"resources"`
 }
 
 type resourceListWithInclusion struct {
@@ -93,10 +93,6 @@ type includedApps struct {
 type bareResource struct {
 	GUID string `json:"guid,omitempty"`
 	Name string `json:"name,omitempty"`
-}
-
-type bareResourceList struct {
-	Resources []bareResource `json:""`
 }
 
 type appResource struct {
@@ -114,10 +110,6 @@ type typedResource struct {
 	resource `json:",inline"`
 	Type     string    `json:"type,omitempty"`
 	Metadata *metadata `json:"metadata,omitempty"`
-}
-
-type typedResourceList struct {
-	Resources []typedResource `json:"resources"`
 }
 
 type metadata struct {
@@ -151,10 +143,6 @@ type statsUsage struct {
 
 type statsResource struct {
 	Usage statsUsage
-}
-
-type statsResourceList struct {
-	Resources []statsResource `json:"resources"`
 }
 
 type manifestResource struct {
@@ -262,15 +250,29 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "E2E Suite")
 }
 
+type sharedSetupData struct {
+	CommonOrgName string `json:"commonOrgName"`
+	CommonOrgGUID string `json:"commonOrgGuid"`
+}
+
 var _ = SynchronizedBeforeSuite(func() []byte {
 	commonTestSetup()
-
-	commonTestOrgGUID = createOrg(generateGUID("common-test-org"))
+	commonTestOrgName = generateGUID("common-test-org")
+	commonTestOrgGUID = createOrg(commonTestOrgName)
 	createOrgRole("organization_user", certUserName, commonTestOrgGUID)
 
-	return []byte(commonTestOrgGUID)
-}, func(commonOrgGUIDBytes []byte) {
-	commonTestOrgGUID = string(commonOrgGUIDBytes)
+	bs, err := json.Marshal(sharedSetupData{
+		CommonOrgName: commonTestOrgName,
+		CommonOrgGUID: commonTestOrgGUID,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	return bs
+}, func(bs []byte) {
+	var sharedSetup sharedSetupData
+	err := json.Unmarshal(bs, &sharedSetup)
+	Expect(err).NotTo(HaveOccurred())
+	commonTestOrgGUID = sharedSetup.CommonOrgGUID
+	commonTestOrgName = sharedSetup.CommonOrgName
 
 	SetDefaultEventuallyTimeout(240 * time.Second)
 	SetDefaultEventuallyPollingInterval(2 * time.Second)
@@ -568,8 +570,8 @@ func createServiceInstance(spaceGUID, name string) string {
 	return serviceInstance.GUID
 }
 
-func listServiceInstances() resourceList {
-	var serviceInstances resourceList
+func listServiceInstances() resourceList[resource] {
+	var serviceInstances resourceList[resource]
 
 	resp, err := adminClient.R().
 		SetResult(&serviceInstances).
@@ -670,7 +672,7 @@ func uploadTestApp(pkgGUID, appBitsFile string) {
 func getAppGUIDFromName(appName string) string {
 	var appGUID string
 	Eventually(func(g Gomega) {
-		var result resourceList
+		var result resourceList[resource]
 		resp, err := adminClient.R().SetResult(&result).Get("/v3/apps?names=" + appName)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(resp).To(HaveRestyStatusCode(http.StatusOK))
@@ -685,8 +687,9 @@ func createAppViaManifest(spaceGUID, appName string) string {
 	manifest := manifestResource{
 		Version: 1,
 		Applications: []applicationResource{{
-			Name:   appName,
-			Memory: "128MB",
+			Name:         appName,
+			Memory:       "128MB",
+			DefaultRoute: true,
 		}},
 	}
 	applySpaceManifest(manifest, spaceGUID)
@@ -706,8 +709,42 @@ func pushTestApp(spaceGUID, appBitsFile string) string {
 	return appGUID
 }
 
+func getAppRoute(appGUID string) string {
+	var routes resourceList[routeResource]
+	resp, err := adminClient.R().
+		SetResult(&routes).
+		Get("/v3/apps/" + appGUID + "/routes")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(resp).To(HaveRestyStatusCode(http.StatusOK))
+	Expect(routes.Resources).ToNot(BeEmpty())
+	return routes.Resources[0].URL
+}
+
+var skipSSLClient = http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	},
+}
+
+func curlApp(appGUID, path string) []byte {
+	url := getAppRoute(appGUID)
+	var body []byte
+	Eventually(func(g Gomega) {
+		r, err := skipSSLClient.Get("https://" + url + path)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer r.Body.Close()
+		g.Expect(r).To(HaveHTTPStatus(http.StatusOK))
+		body, err = io.ReadAll(r.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+	}).Should(Succeed())
+
+	return body
+}
+
 func getDomainGUID(domainName string) string {
-	res := bareResourceList{}
+	res := resourceList[bareResource]{}
 	resp, err := adminClient.R().
 		SetResult(&res).
 		Get("/v3/domains")

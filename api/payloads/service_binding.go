@@ -62,3 +62,17 @@ func (l *ServiceBindingList) DecodeFromURLValues(values url.Values) error {
 
 	return nil
 }
+
+type ServiceBindingUpdate struct {
+	Metadata MetadataPatch `json:"metadata"`
+}
+
+func (c *ServiceBindingUpdate) ToMessage(serviceBindingGUID string) repositories.UpdateServiceBindingMessage {
+	return repositories.UpdateServiceBindingMessage{
+		GUID: serviceBindingGUID,
+		MetadataPatch: repositories.MetadataPatch{
+			Labels:      c.Metadata.Labels,
+			Annotations: c.Metadata.Annotations,
+		},
+	}
+}

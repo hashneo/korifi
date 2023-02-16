@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -34,10 +35,13 @@ import (
 )
 
 var (
-	cancel          context.CancelFunc
-	testEnv         *envtest.Environment
-	k8sClient       client.Client
-	cfRootNamespace string
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	testEnv             *envtest.Environment
+	k8sClient           client.Client
+	cfRootNamespace     string
+	cfOrg               *korifiv1alpha1.CFOrg
+	imageRegistrySecret *corev1.Secret
 )
 
 const (
@@ -55,8 +59,7 @@ func TestWorkloadsControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.DebugLevel)))
 
-	ctx, cancelFunc := context.WithCancel(context.TODO())
-	cancel = cancelFunc
+	ctx, cancel = context.WithCancel(context.TODO())
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
@@ -92,8 +95,6 @@ var _ = BeforeSuite(func() {
 
 	cfRootNamespace = testutils.PrefixedGUID("root-namespace")
 
-	createNamespace(ctx, k8sClient, cfRootNamespace)
-
 	controllerConfig := &config.ControllerConfig{
 		CFProcessDefaults: config.CFProcessDefaults{
 			MemoryMB:    500,
@@ -109,7 +110,8 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
 		ctrl.Log.WithName("controllers").WithName("CFApp"),
-		env.NewBuilder(k8sManager.GetClient()),
+		env.NewVCAPServicesEnvValueBuilder(k8sManager.GetClient()),
+		env.NewVCAPApplicationEnvValueBuilder(k8sManager.GetClient()),
 	)).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -121,7 +123,7 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		ctrl.Log.WithName("controllers").WithName("CFBuild"),
 		controllerConfig,
-		env.NewBuilder(k8sManager.GetClient()),
+		env.NewWorkloadEnvBuilder(k8sManager.GetClient()),
 	)
 	err = (cfBuildReconciler).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
@@ -131,7 +133,7 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		ctrl.Log.WithName("controllers").WithName("CFProcess"),
 		controllerConfig,
-		env.NewBuilder(k8sManager.GetClient()),
+		env.NewWorkloadEnvBuilder(k8sManager.GetClient()),
 	)).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -161,7 +163,7 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetScheme(),
 		k8sManager.GetEventRecorderFor("cftask-controller"),
 		ctrl.Log.WithName("controllers").WithName("CFTask"),
-		env.NewBuilder(k8sManager.GetClient()),
+		env.NewWorkloadEnvBuilder(k8sManager.GetClient()),
 		2*time.Second,
 	).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
@@ -187,6 +189,10 @@ var _ = BeforeSuite(func() {
 		err = k8sManager.Start(ctx)
 		Expect(err).NotTo(HaveOccurred())
 	}()
+
+	createNamespace(cfRootNamespace)
+	imageRegistrySecret = createSecret(ctx, k8sClient, packageRegistrySecretName, cfRootNamespace)
+	cfOrg = createOrg(cfRootNamespace)
 })
 
 var _ = AfterSuite(func() {
@@ -207,7 +213,7 @@ func createBuildWithDroplet(ctx context.Context, k8sClient client.Client, cfBuil
 	return patchedCFBuild
 }
 
-func createNamespace(ctx context.Context, k8sClient client.Client, name string) *corev1.Namespace {
+func createNamespace(name string) *corev1.Namespace {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -285,16 +291,6 @@ func createServiceAccount(ctx context.Context, k8sclient client.Client, serviceA
 	return serviceAccount
 }
 
-func createNamespaceWithCleanup(ctx context.Context, k8sClient client.Client, name string) *corev1.Namespace {
-	namespace := createNamespace(ctx, k8sClient, name)
-
-	DeferCleanup(func() {
-		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
-	})
-
-	return namespace
-}
-
 func patchAppWithDroplet(ctx context.Context, k8sClient client.Client, appGUID, spaceGUID, buildGUID string) *korifiv1alpha1.CFApp {
 	cfApp := &korifiv1alpha1.CFApp{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,4 +302,40 @@ func patchAppWithDroplet(ctx context.Context, k8sClient client.Client, appGUID, 
 		cfApp.Spec.CurrentDropletRef = corev1.LocalObjectReference{Name: buildGUID}
 	})).To(Succeed())
 	return cfApp
+}
+
+func createOrg(rootNamespace string) *korifiv1alpha1.CFOrg {
+	org := &korifiv1alpha1.CFOrg{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testutils.PrefixedGUID("org"),
+			Namespace: rootNamespace,
+		},
+		Spec: korifiv1alpha1.CFOrgSpec{
+			DisplayName: testutils.PrefixedGUID("org"),
+		},
+	}
+	Expect(k8sClient.Create(ctx, org)).To(Succeed())
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(org), org)).To(Succeed())
+		g.Expect(meta.IsStatusConditionTrue(org.Status.Conditions, StatusConditionReady)).To(BeTrue())
+	}).Should(Succeed())
+	return org
+}
+
+func createSpace(org *korifiv1alpha1.CFOrg) *korifiv1alpha1.CFSpace {
+	cfSpace := &korifiv1alpha1.CFSpace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testutils.PrefixedGUID("space"),
+			Namespace: org.Status.GUID,
+		},
+		Spec: korifiv1alpha1.CFSpaceSpec{
+			DisplayName: testutils.PrefixedGUID("space"),
+		},
+	}
+	Expect(k8sClient.Create(ctx, cfSpace)).To(Succeed())
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cfSpace), cfSpace)).To(Succeed())
+		g.Expect(meta.IsStatusConditionTrue(cfSpace.Status.Conditions, StatusConditionReady)).To(BeTrue())
+	}).Should(Succeed())
+	return cfSpace
 }

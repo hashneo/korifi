@@ -11,6 +11,7 @@ import (
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/webhooks"
 	"code.cloudfoundry.org/korifi/controllers/webhooks/services"
+	"code.cloudfoundry.org/korifi/tools/k8s"
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -52,6 +53,8 @@ type ServiceBindingRecord struct {
 	AppGUID             string
 	ServiceInstanceGUID string
 	SpaceGUID           string
+	Labels              map[string]string
+	Annotations         map[string]string
 	CreatedAt           string
 	UpdatedAt           string
 	LastOperation       ServiceBindingLastOperation
@@ -105,6 +108,11 @@ func (m CreateServiceBindingMessage) toCFServiceBinding(namespace string) *korif
 			AppRef: corev1.LocalObjectReference{Name: m.AppGUID},
 		},
 	}
+}
+
+type UpdateServiceBindingMessage struct {
+	GUID          string
+	MetadataPatch MetadataPatch
 }
 
 func (r *ServiceBindingRepo) CreateServiceBinding(ctx context.Context, authInfo authorization.Info, message CreateServiceBindingMessage) (ServiceBindingRecord, error) {
@@ -178,6 +186,59 @@ func (r *ServiceBindingRepo) DeleteServiceBinding(ctx context.Context, authInfo 
 	return nil
 }
 
+func (r *ServiceBindingRepo) GetServiceBinding(ctx context.Context, authInfo authorization.Info, guid string) (ServiceBindingRecord, error) {
+	ns, err := r.namespaceRetriever.NamespaceFor(ctx, guid, ServiceBindingResourceType)
+	if err != nil {
+		return ServiceBindingRecord{}, err
+	}
+
+	userClient, err := r.userClientFactory.BuildClient(authInfo)
+	if err != nil {
+		return ServiceBindingRecord{}, fmt.Errorf("get-service-binding failed to create user client: %w", err)
+	}
+
+	serviceBinding := &korifiv1alpha1.CFServiceBinding{}
+	err = userClient.Get(ctx, client.ObjectKey{Namespace: ns, Name: guid}, serviceBinding)
+	if err != nil {
+		return ServiceBindingRecord{}, apierrors.FromK8sError(err, ServiceBindingResourceType)
+	}
+
+	return cfServiceBindingToRecord(serviceBinding), nil
+}
+
+func (r *ServiceBindingRepo) UpdateServiceBinding(ctx context.Context, authInfo authorization.Info, updateMsg UpdateServiceBindingMessage) (ServiceBindingRecord, error) {
+	userClient, err := r.userClientFactory.BuildClient(authInfo)
+	if err != nil {
+		return ServiceBindingRecord{}, fmt.Errorf("failed to create user client: %w", err)
+	}
+
+	ns, err := r.namespaceRetriever.NamespaceFor(ctx, updateMsg.GUID, ServiceBindingResourceType)
+	if err != nil {
+		return ServiceBindingRecord{}, err
+	}
+
+	serviceBinding := &korifiv1alpha1.CFServiceBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      updateMsg.GUID,
+			Namespace: ns,
+		},
+	}
+
+	err = userClient.Get(ctx, client.ObjectKeyFromObject(serviceBinding), serviceBinding)
+	if err != nil {
+		return ServiceBindingRecord{}, fmt.Errorf("failed to get service binding: %w", apierrors.FromK8sError(err, ServiceBindingResourceType))
+	}
+
+	err = k8s.PatchResource(ctx, userClient, serviceBinding, func() {
+		updateMsg.MetadataPatch.Apply(serviceBinding)
+	})
+	if err != nil {
+		return ServiceBindingRecord{}, fmt.Errorf("failed to patch service binding metadata: %w", apierrors.FromK8sError(err, ServiceBindingResourceType))
+	}
+
+	return cfServiceBindingToRecord(serviceBinding), nil
+}
+
 func cfServiceBindingToRecord(binding *korifiv1alpha1.CFServiceBinding) ServiceBindingRecord {
 	createdAt := binding.CreationTimestamp.UTC().Format(TimestampFormat)
 	updatedAt, _ := getTimeLastUpdatedTimestamp(&binding.ObjectMeta)
@@ -187,7 +248,13 @@ func cfServiceBindingToRecord(binding *korifiv1alpha1.CFServiceBinding) ServiceB
 		Name:                binding.Spec.DisplayName,
 		AppGUID:             binding.Spec.AppRef.Name,
 		ServiceInstanceGUID: binding.Spec.Service.Name,
+<<<<<<< HEAD
 		SpaceGUID:           binding.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
+=======
+		SpaceGUID:           binding.Namespace,
+		Labels:              binding.Labels,
+		Annotations:         binding.Annotations,
+>>>>>>> main
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
 		LastOperation: ServiceBindingLastOperation{

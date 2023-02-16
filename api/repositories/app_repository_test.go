@@ -1352,13 +1352,14 @@ var _ = Describe("AppRepository", func() {
 				Expect(appEnvRecord.SpaceGUID).To(Equal(cfApp.Namespace))
 				Expect(appEnvRecord.EnvironmentVariables).To(Equal(envVars))
 				Expect(appEnvRecord.SystemEnv).To(BeEmpty())
+				Expect(appEnvRecord.AppEnv).To(BeEmpty())
 			})
 
 			When("the app has a service-binding secret", func() {
 				var (
 					vcapServiceSecretDataByte map[string][]byte
 					vcapServiceSecretData     map[string]string
-					vcapServiceDataPresenter  *env.VcapServicesPresenter
+					vcapServiceDataPresenter  *env.VCAPServices
 					err                       error
 				)
 
@@ -1367,7 +1368,7 @@ var _ = Describe("AppRepository", func() {
 					vcapServiceSecretDataByte, err = generateVcapServiceSecretDataByte()
 					Expect(err).NotTo(HaveOccurred())
 					vcapServiceSecretData = asMapOfStrings(vcapServiceSecretDataByte)
-					vcapServiceDataPresenter = new(env.VcapServicesPresenter)
+					vcapServiceDataPresenter = new(env.VCAPServices)
 					err = json.Unmarshal(vcapServiceSecretDataByte["VCAP_SERVICES"], vcapServiceDataPresenter)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -1441,6 +1442,31 @@ var _ = Describe("AppRepository", func() {
 				})
 			})
 
+			When("the app has a vcap application secret", func() {
+				BeforeEach(func() {
+					vcapAppSecretName := prefixedGUID("vcap-app-secret")
+					Expect(k8sClient.Create(ctx, &corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      vcapAppSecretName,
+							Namespace: cfApp.Namespace,
+						},
+						Data: map[string][]byte{
+							"VCAP_APPLICATION": []byte(`{"foo":"bar"}`),
+						},
+					})).To(Succeed())
+					Expect(k8s.Patch(ctx, k8sClient, cfApp, func() {
+						cfApp.Status.VCAPApplicationSecretName = vcapAppSecretName
+					})).To(Succeed())
+				})
+
+				It("returns the env vars stored on the secret", func() {
+					Expect(getAppEnvErr).NotTo(HaveOccurred())
+					Expect(appEnvRecord.EnvironmentVariables).To(Equal(envVars))
+
+					Expect(appEnvRecord.AppEnv).To(HaveKey("VCAP_APPLICATION"))
+				})
+			})
+
 			When("the EnvSecret doesn't exist", func() {
 				BeforeEach(func() {
 					secretName = "doIReallyExist"
@@ -1460,6 +1486,20 @@ var _ = Describe("AppRepository", func() {
 
 					ogCFApp := cfApp.DeepCopy()
 					cfApp.Status.VCAPServicesSecretName = vcapServicesSecretName
+					Expect(k8sClient.Status().Patch(testCtx, cfApp, client.MergeFrom(ogCFApp))).To(Succeed())
+				})
+
+				It("errors", func() {
+					Expect(getAppEnvErr).To(MatchError(ContainSubstring("Secret")))
+				})
+			})
+
+			When("the VCAPApplication secret doesn't exist", func() {
+				BeforeEach(func() {
+					vcapApplicationSecretName := "doIReallyExist"
+
+					ogCFApp := cfApp.DeepCopy()
+					cfApp.Status.VCAPApplicationSecretName = vcapApplicationSecretName
 					Expect(k8sClient.Status().Patch(testCtx, cfApp, client.MergeFrom(ogCFApp))).To(Succeed())
 				})
 
@@ -1552,8 +1592,8 @@ func generateVcapServiceSecretDataByte() (map[string][]byte, error) {
 		VolumeMounts:   nil,
 	}
 
-	vcapServicesData, err := json.Marshal(env.VcapServicesPresenter{
-		"user-provided": []env.ServiceDetails{
+	vcapServicesData, err := json.Marshal(env.VCAPServices{
+		UserProvided: []env.ServiceDetails{
 			serviceDetails,
 		},
 	})

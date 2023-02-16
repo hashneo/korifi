@@ -4,15 +4,26 @@ import (
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
 	"context"
-	"encoding/json"
 	"fmt"
+<<<<<<< HEAD
 	SAPv1alpha1 "github.tools.sap/BTPFTechOffice/korifi/crd/extensions/api/v1alpha1"
+=======
+
+	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
+
+>>>>>>> main
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+<<<<<<< HEAD
 type VcapServicesPresenter map[string][]ServiceDetails
+=======
+type VCAPServices struct {
+	UserProvided []ServiceDetails `json:"user-provided,omitempty"`
+}
+>>>>>>> main
 
 /*
 	type VcapServicesPresenter struct {
@@ -33,16 +44,16 @@ type ServiceDetails struct {
 	VolumeMounts   []string          `json:"volume_mounts"`
 }
 
-type Builder struct {
+type WorkloadEnvBuilder struct {
 	k8sClient client.Client
 }
 
-func NewBuilder(k8sClient client.Client) *Builder {
-	return &Builder{k8sClient: k8sClient}
+func NewWorkloadEnvBuilder(k8sClient client.Client) *WorkloadEnvBuilder {
+	return &WorkloadEnvBuilder{k8sClient: k8sClient}
 }
 
-func (b *Builder) BuildEnv(ctx context.Context, cfApp *korifiv1alpha1.CFApp) ([]corev1.EnvVar, error) {
-	var appEnvSecret, vcapServicesSecret corev1.Secret
+func (b *WorkloadEnvBuilder) BuildEnv(ctx context.Context, cfApp *korifiv1alpha1.CFApp) ([]corev1.EnvVar, error) {
+	var appEnvSecret, vcapServicesSecret, vcapApplicationSecret corev1.Secret
 
 	if cfApp.Spec.EnvSecretName != "" {
 		err := b.k8sClient.Get(ctx, types.NamespacedName{Namespace: cfApp.Namespace, Name: cfApp.Spec.EnvSecretName}, &appEnvSecret)
@@ -58,6 +69,7 @@ func (b *Builder) BuildEnv(ctx context.Context, cfApp *korifiv1alpha1.CFApp) ([]
 		}
 	}
 
+<<<<<<< HEAD
 	// We explicitly order the vcapServicesSecret last so that its "VCAP_SERVICES" contents win
 	return envVarsFromSecrets(appEnvSecret, vcapServicesSecret), nil
 }
@@ -88,9 +100,14 @@ func (b *Builder) BuildVCAPServicesEnvValue(ctx context.Context, cfApp *korifiv1
 
 		var serviceEnv ServiceDetails
 		serviceEnv, err = buildSingleServiceEnv(ctx, b.k8sClient, currentServiceBinding)
+=======
+	if cfApp.Status.VCAPApplicationSecretName != "" {
+		err := b.k8sClient.Get(ctx, types.NamespacedName{Namespace: cfApp.Namespace, Name: cfApp.Status.VCAPApplicationSecretName}, &vcapApplicationSecret)
+>>>>>>> main
 		if err != nil {
-			return "", err
+			return nil, fmt.Errorf("error when trying to fetch vcap application secret %s/%s: %w", cfApp.Namespace, cfApp.Status.VCAPApplicationSecretName, err)
 		}
+<<<<<<< HEAD
 
 		serviceEnvs = append(serviceEnvs, serviceEnv)
 
@@ -117,6 +134,12 @@ func mapFromSecret(secret corev1.Secret) map[string]string {
 		convertedMap[k] = string(v)
 	}
 	return convertedMap
+=======
+	}
+
+	// We explicitly order the vcapServicesSecret last so that its "VCAP_*" contents win
+	return envVarsFromSecrets(appEnvSecret, vcapServicesSecret, vcapApplicationSecret), nil
+>>>>>>> main
 }
 
 func envVarsFromSecrets(secrets ...corev1.Secret) []corev1.EnvVar {
@@ -136,6 +159,7 @@ func envVarsFromSecrets(secrets ...corev1.Secret) []corev1.EnvVar {
 	}
 	return envVars
 }
+<<<<<<< HEAD
 
 func fromServiceBinding(
 	ctx context.Context,
@@ -218,3 +242,5 @@ func buildSingleServiceEnv(ctx context.Context, k8sClient client.Client, service
 
 	return fromServiceBinding(ctx, k8sClient, serviceBinding, serviceInstance, secret)
 }
+=======
+>>>>>>> main

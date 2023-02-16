@@ -21,18 +21,15 @@ var _ = Describe("Service Bindings", func() {
 
 	BeforeEach(func() {
 		spaceGUID = createSpace(generateGUID("space1"), commonTestOrgGUID)
+		appGUID = createApp(spaceGUID, generateGUID("app"))
+		instanceGUID = createServiceInstance(spaceGUID, generateGUID("service-instance"))
 	})
 
 	AfterEach(func() {
 		deleteSpace(spaceGUID)
 	})
 
-	Describe("Create", func() {
-		BeforeEach(func() {
-			appGUID = createApp(spaceGUID, generateGUID("app"))
-			instanceGUID = createServiceInstance(spaceGUID, generateGUID("service-instance"))
-		})
-
+	Describe("POST /v3/service_credential_bindings/{guid}", func() {
 		JustBeforeEach(func() {
 			httpResp, httpError = certClient.R().
 				SetBody(typedResource{
@@ -83,10 +80,28 @@ var _ = Describe("Service Bindings", func() {
 		})
 	})
 
-	Describe("Delete", func() {
+	Describe("GET /v3/service_credential_bindings/{guid}", func() {
+		var respResource responseResource
+
 		BeforeEach(func() {
-			appGUID = createApp(spaceGUID, generateGUID("app"))
-			instanceGUID = createServiceInstance(spaceGUID, generateGUID("service-instance"))
+			createSpaceRole("space_developer", certUserName, spaceGUID)
+			bindingGUID = createServiceBinding(appGUID, instanceGUID)
+		})
+
+		JustBeforeEach(func() {
+			httpResp, httpError = certClient.R().
+				SetResult(&respResource).
+				Get("/v3/service_credential_bindings/" + bindingGUID)
+		})
+
+		It("gets the service binding", func() {
+			Expect(httpResp).To(HaveRestyStatusCode(http.StatusOK))
+			Expect(respResource.GUID).To(Equal(bindingGUID))
+		})
+	})
+
+	Describe("DELETE /v3/service_credential_bindings/{guid}", func() {
+		BeforeEach(func() {
 			bindingGUID = createServiceBinding(appGUID, instanceGUID)
 		})
 
@@ -122,15 +137,13 @@ var _ = Describe("Service Bindings", func() {
 		})
 	})
 
-	Describe("List", func() {
+	Describe("GET /v3/service_credential_bindings", func() {
 		var (
 			queryString string
 			result      resourceListWithInclusion
 		)
 
 		BeforeEach(func() {
-			appGUID = createApp(spaceGUID, generateGUID("app"))
-			instanceGUID = createServiceInstance(spaceGUID, generateGUID("service-instance"))
 			bindingGUID = createServiceBinding(appGUID, instanceGUID)
 
 			queryString = ""
@@ -193,6 +206,36 @@ var _ = Describe("Service Bindings", func() {
 					))
 				})
 			})
+		})
+	})
+
+	Describe("PATCH /v3/service_credential_bindings/{guid}", func() {
+		var respResource responseResource
+
+		BeforeEach(func() {
+			bindingGUID = createServiceBinding(appGUID, instanceGUID)
+			createSpaceRole("space_developer", certUserName, spaceGUID)
+		})
+
+		JustBeforeEach(func() {
+			var err error
+			httpResp, err = certClient.R().
+				SetBody(metadataResource{
+					Metadata: &metadataPatch{
+						Annotations: &map[string]string{"foo": "bar"},
+						Labels:      &map[string]string{"baz": "bar"},
+					},
+				}).
+				SetResult(&respResource).
+				Patch("/v3/service_credential_bindings/" + bindingGUID)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns 200 OK and updates service binding labels and annotations", func() {
+			Expect(httpResp).To(HaveRestyStatusCode(http.StatusOK))
+			Expect(respResource.GUID).To(Equal(bindingGUID))
+			Expect(respResource.Metadata.Annotations).To(HaveKeyWithValue("foo", "bar"))
+			Expect(respResource.Metadata.Labels).To(HaveKeyWithValue("baz", "bar"))
 		})
 	})
 })

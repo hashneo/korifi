@@ -37,7 +37,7 @@ generate-fakes:
 
 fmt: install-gofumpt install-shfmt
 	$(GOFUMPT) -w .
-	$(SHFMT) -w -i 2 -ci .
+	$(SHFMT) -f . | grep -v '^tests/vendor' | xargs $(SHFMT) -w -i 2 -ci
 
 vet: ## Run go vet against code.
 	go vet ./...
@@ -69,3 +69,4 @@ install-vendir:
 
 vendir-update-dependencies: install-vendir
 	$(VENDIR) sync --chdir tests
+	cd tests/vendor/testApps/dora; zip -r ../../../e2e/assets/dora .

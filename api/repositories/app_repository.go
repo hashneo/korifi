@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"code.cloudfoundry.org/korifi/controllers/controllers/workloads/env"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	apierrors "code.cloudfoundry.org/korifi/api/errors"
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 	"code.cloudfoundry.org/korifi/controllers/controllers/workloads"
-	"code.cloudfoundry.org/korifi/controllers/controllers/workloads/env"
 	"code.cloudfoundry.org/korifi/controllers/webhooks"
 	"code.cloudfoundry.org/korifi/tools/k8s"
 
@@ -101,6 +101,7 @@ type AppEnvRecord struct {
 	SpaceGUID            string
 	EnvironmentVariables map[string]string
 	SystemEnv            map[string]interface{}
+	AppEnv               map[string]interface{}
 }
 
 type CurrentDropletRecord struct {
@@ -755,7 +756,7 @@ func (f *AppRepo) GetAppEnv(ctx context.Context, authInfo authorization.Info, ap
 		}
 
 		if vcapServicesData, ok := vcapServiceSecret.Data["VCAP_SERVICES"]; ok {
-			vcapServicesPresenter := new(env.VcapServicesPresenter)
+			vcapServicesPresenter := new(env.VCAPServices)
 			if err = json.Unmarshal(vcapServicesData, &vcapServicesPresenter); err != nil {
 				return AppEnvRecord{}, fmt.Errorf("error unmarshalling VCAP Service Secret %q for App %q: %w",
 					app.vcapServiceSecretName,
@@ -763,7 +764,7 @@ func (f *AppRepo) GetAppEnv(ctx context.Context, authInfo authorization.Info, ap
 					apierrors.FromK8sError(err, AppEnvResourceType))
 			}
 
-			if len(*vcapServicesPresenter) > 0 {
+			if len(vcapServicesPresenter.UserProvided) > 0 {
 				systemEnvMap["VCAP_SERVICES"] = vcapServicesPresenter
 			}
 		}

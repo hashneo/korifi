@@ -1,39 +1,23 @@
 package env
 
 import (
-	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
-	"code.cloudfoundry.org/korifi/controllers/controllers/shared"
 	"context"
 	"fmt"
-<<<<<<< HEAD
-	SAPv1alpha1 "github.tools.sap/BTPFTechOffice/korifi/crd/extensions/api/v1alpha1"
-=======
 
 	korifiv1alpha1 "code.cloudfoundry.org/korifi/controllers/api/v1alpha1"
 
->>>>>>> main
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-<<<<<<< HEAD
-type VcapServicesPresenter map[string][]ServiceDetails
-=======
 type VCAPServices struct {
 	UserProvided []ServiceDetails `json:"user-provided,omitempty"`
 }
->>>>>>> main
 
-/*
-	type VcapServicesPresenter struct {
-		UserProvided []ServiceDetails `json:"user-provided,omitempty"`
-	}
-*/
 type ServiceDetails struct {
 	Label          string            `json:"label"`
 	Name           string            `json:"name"`
-	Plan           string            `json:"plan"`
 	Tags           []string          `json:"tags"`
 	InstanceGUID   string            `json:"instance_guid"`
 	InstanceName   string            `json:"instance_name"`
@@ -69,77 +53,15 @@ func (b *WorkloadEnvBuilder) BuildEnv(ctx context.Context, cfApp *korifiv1alpha1
 		}
 	}
 
-<<<<<<< HEAD
-	// We explicitly order the vcapServicesSecret last so that its "VCAP_SERVICES" contents win
-	return envVarsFromSecrets(appEnvSecret, vcapServicesSecret), nil
-}
-
-func (b *Builder) BuildVCAPServicesEnvValue(ctx context.Context, cfApp *korifiv1alpha1.CFApp) (string, error) {
-	serviceBindings := &korifiv1alpha1.CFServiceBindingList{}
-	err := b.k8sClient.List(ctx, serviceBindings,
-		client.InNamespace(cfApp.Namespace),
-		client.MatchingFields{shared.IndexServiceBindingAppGUID: cfApp.Name},
-	)
-	if err != nil {
-		return "", fmt.Errorf("error listing CFServiceBindings: %w", err)
-	}
-
-	if len(serviceBindings.Items) == 0 {
-		return "{}", nil
-	}
-
-	data := VcapServicesPresenter{}
-
-	for _, currentServiceBinding := range serviceBindings.Items {
-		serviceEnvs := []ServiceDetails{}
-
-		// If finalizing do not append
-		if !currentServiceBinding.DeletionTimestamp.IsZero() {
-			continue
-		}
-
-		var serviceEnv ServiceDetails
-		serviceEnv, err = buildSingleServiceEnv(ctx, b.k8sClient, currentServiceBinding)
-=======
 	if cfApp.Status.VCAPApplicationSecretName != "" {
 		err := b.k8sClient.Get(ctx, types.NamespacedName{Namespace: cfApp.Namespace, Name: cfApp.Status.VCAPApplicationSecretName}, &vcapApplicationSecret)
->>>>>>> main
 		if err != nil {
 			return nil, fmt.Errorf("error when trying to fetch vcap application secret %s/%s: %w", cfApp.Namespace, cfApp.Status.VCAPApplicationSecretName, err)
 		}
-<<<<<<< HEAD
-
-		serviceEnvs = append(serviceEnvs, serviceEnv)
-
-		data[serviceEnvs[0].Label] = serviceEnvs
-	}
-
-	toReturn, err := json.Marshal(data)
-
-	/*
-		toReturn, err := json.Marshal(VcapServicesPresenter{
-			UserProvided: serviceEnvs,
-		})
-	*/
-	if err != nil {
-		return "", err
-	}
-
-	return string(toReturn), nil
-}
-
-func mapFromSecret(secret corev1.Secret) map[string]string {
-	convertedMap := make(map[string]string)
-	for k, v := range secret.Data {
-		convertedMap[k] = string(v)
-	}
-	return convertedMap
-=======
 	}
 
 	// We explicitly order the vcapServicesSecret last so that its "VCAP_*" contents win
 	return envVarsFromSecrets(appEnvSecret, vcapServicesSecret, vcapApplicationSecret), nil
->>>>>>> main
 }
 
 func envVarsFromSecrets(secrets ...corev1.Secret) []corev1.EnvVar {
@@ -159,88 +81,3 @@ func envVarsFromSecrets(secrets ...corev1.Secret) []corev1.EnvVar {
 	}
 	return envVars
 }
-<<<<<<< HEAD
-
-func fromServiceBinding(
-	ctx context.Context,
-	k8sClient client.Client,
-	serviceBinding korifiv1alpha1.CFServiceBinding,
-	serviceInstance korifiv1alpha1.CFServiceInstance,
-	serviceBindingSecret corev1.Secret,
-) (ServiceDetails, error) {
-	var serviceName string
-	var bindingName *string
-
-	if serviceBinding.Spec.DisplayName != nil {
-		serviceName = *serviceBinding.Spec.DisplayName
-		bindingName = serviceBinding.Spec.DisplayName
-	} else {
-		serviceName = serviceInstance.Spec.DisplayName
-		bindingName = nil
-	}
-
-	tags := serviceInstance.Spec.Tags
-	if tags == nil {
-		tags = []string{}
-	}
-
-	detailsLabel := "user-provided"
-	servicePlan := ""
-
-	if serviceInstance.Spec.Type == "managed" {
-		cfServicePlan := SAPv1alpha1.CFServicePlan{}
-
-		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceInstance.Namespace, Name: serviceInstance.Spec.ServicePlan}, &cfServicePlan)
-		if err != nil {
-			return ServiceDetails{}, err
-		}
-
-		// Set the service plan name we are using
-		servicePlan = cfServicePlan.Spec.PlanName
-
-		cfServiceOffering := SAPv1alpha1.CFServiceOffering{}
-
-		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceInstance.Namespace, Name: cfServicePlan.Spec.Relationships.ServiceOfferingGUID}, &cfServiceOffering)
-		if err != nil {
-			return ServiceDetails{}, err
-		}
-
-		detailsLabel = cfServiceOffering.Spec.OfferingName
-	}
-
-	return ServiceDetails{
-		Label:          detailsLabel,
-		Name:           serviceName,
-		Plan:           servicePlan,
-		Tags:           tags,
-		InstanceGUID:   serviceInstance.Name,
-		InstanceName:   serviceInstance.Spec.DisplayName,
-		BindingGUID:    serviceBinding.Name,
-		BindingName:    bindingName,
-		Credentials:    mapFromSecret(serviceBindingSecret),
-		SyslogDrainURL: nil,
-		VolumeMounts:   []string{},
-	}, nil
-}
-
-func buildSingleServiceEnv(ctx context.Context, k8sClient client.Client, serviceBinding korifiv1alpha1.CFServiceBinding) (ServiceDetails, error) {
-	if serviceBinding.Status.Binding.Name == "" {
-		return ServiceDetails{}, fmt.Errorf("service binding secret name is empty")
-	}
-
-	serviceInstance := korifiv1alpha1.CFServiceInstance{}
-	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceBinding.Namespace, Name: serviceBinding.Spec.Service.Name}, &serviceInstance)
-	if err != nil {
-		return ServiceDetails{}, fmt.Errorf("error fetching CFServiceInstance: %w", err)
-	}
-
-	secret := corev1.Secret{}
-	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: serviceBinding.Namespace, Name: serviceBinding.Status.Binding.Name}, &secret)
-	if err != nil {
-		return ServiceDetails{}, fmt.Errorf("error fetching CFServiceBinding Secret: %w", err)
-	}
-
-	return fromServiceBinding(ctx, k8sClient, serviceBinding, serviceInstance, secret)
-}
-=======
->>>>>>> main

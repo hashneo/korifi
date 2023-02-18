@@ -77,15 +77,12 @@ func (r *CFAppReconciler) ReconcileResource(ctx context.Context, cfApp *korifiv1
 		return ctrl.Result{}, err
 	}
 
-<<<<<<< HEAD
 	if cfApp.Labels == nil {
 		cfApp.Labels = map[string]string{}
 	}
 	//TODO: Find a way better way to do this!
 	cfApp.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey] = regexp.MustCompile(`.*([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12})$`).ReplaceAllString(cfApp.Namespace, "$1")
 
-	err = r.reconcileVCAPServicesSecret(ctx, log, cfApp)
-=======
 	secretName := cfApp.Name + "-vcap-application"
 	err = r.reconcileVCAPSecret(ctx, log, cfApp, secretName, r.vcapApplicationEnvBuilder)
 	if err != nil {
@@ -96,7 +93,7 @@ func (r *CFAppReconciler) ReconcileResource(ctx context.Context, cfApp *korifiv1
 
 	secretName = cfApp.Name + "-vcap-services"
 	err = r.reconcileVCAPSecret(ctx, log, cfApp, secretName, r.vcapServicesEnvBuilder)
->>>>>>> main
+
 	if err != nil {
 		log.Error(err, "unable to create CFApp VCAP Services secret")
 		return ctrl.Result{}, err

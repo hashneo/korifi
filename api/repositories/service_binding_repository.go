@@ -248,13 +248,9 @@ func cfServiceBindingToRecord(binding *korifiv1alpha1.CFServiceBinding) ServiceB
 		Name:                binding.Spec.DisplayName,
 		AppGUID:             binding.Spec.AppRef.Name,
 		ServiceInstanceGUID: binding.Spec.Service.Name,
-<<<<<<< HEAD
 		SpaceGUID:           binding.Labels[korifiv1alpha1.CFSpaceGUIDLabelKey],
-=======
-		SpaceGUID:           binding.Namespace,
 		Labels:              binding.Labels,
 		Annotations:         binding.Annotations,
->>>>>>> main
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
 		LastOperation: ServiceBindingLastOperation{

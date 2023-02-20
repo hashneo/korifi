@@ -21,8 +21,10 @@ spec:
       - env:
         - name: APICONFIG
           value: /etc/korifi-api-config
+{{- if .Values.api.expose }}
         - name: TLSCONFIG
           value: /etc/korifi-tls-config
+{{- end }}
         image: {{ .Values.api.image }}
 {{- if .Values.global.debug }}
         command:
@@ -46,9 +48,11 @@ spec:
         - mountPath: /etc/korifi-api-config
           name: korifi-api-config
           readOnly: true
+{{- if .Values.api.expose }}
         - mountPath: /etc/korifi-tls-config
           name: korifi-tls-config
           readOnly: true
+{{- end }}
 {{- if .Values.global.containerRegistryCACertSecret }}
         - mountPath: /etc/ssl/certs/registry-ca.crt
           name: korifi-registry-ca-cert
@@ -61,9 +65,12 @@ spec:
       - configMap:
           name: korifi-api-config
         name: korifi-api-config
+{{- if .Values.api.expose }}
       - name: korifi-tls-config
         secret:
           secretName: korifi-api-internal-cert
+{{- end }}
+
 {{- if .Values.global.containerRegistryCACertSecret }}
       - name: korifi-registry-ca-cert
         secret:
